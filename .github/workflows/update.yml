@@ -7,6 +7,12 @@ on:
     # 引け後の確定値（日本時間 朝8:15ごろ）
     - cron: '15 23 * * 1-5'
   workflow_dispatch:
+  # 取得スクリプトや設定を変えたときもすぐ実行して確認
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/**'
 
 permissions:
   contents: write
