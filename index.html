@@ -157,7 +157,11 @@ h1 { font-size: 22px; margin: 0; letter-spacing: 0.02em; }
 
 <script>
 const fmt = (v, n = 2) => (v == null || Number.isNaN(v) ? '–' : Number(v).toFixed(n))
-const signed = (v, n = 2) => (v == null ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v).toFixed(n))
+const signed = (v, n = 2) => {
+  if (v == null) return '–'
+  const r = Number(v.toFixed(n))
+  return (r > 0 ? '+' : r < 0 ? '−' : '±') + Math.abs(r).toFixed(n)
+}
 const md = (d) => { const [, m, dd] = d.split('-'); return `${+m}/${+dd}` }
 const last = (s, k = 1) => s[s.length - k]
 
