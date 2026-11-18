@@ -147,7 +147,7 @@ h1 { font-size: 22px; margin: 0; letter-spacing: 0.02em; }
       <li><b>プットコールレシオ</b>：1.15以上で「弱気に傾きすぎ」＝反転しやすい（CBOE Total）。</li>
       <li><b>VIX</b>：20台はまだ恐怖不足。30超え（できれば40超え）まで上がり、そこから下がり始めたら買い場サイン。</li>
       <li><b>Fear &amp; Greed</b>：25以下（Extreme Fear）で点灯。</li>
-      <li><b>米10年債利回り</b>：約1ヶ月（20営業日）で0.30%以上低下したら「急低下」で点灯。</li>
+      <li><b>米10年債利回り</b>（FREDの場合は1営業日遅れ）：約1ヶ月（20営業日）で0.30%以上低下したら「急低下」で点灯。</li>
       <li>🔥 <b>最強シグナル</b>：「VIXが高値から低下」＋「10年債利回りが急低下」が同時に点灯。</li>
       <li>一時的な急変はダマシのことも。3〜5日の流れで確認し、エントリーは3〜5回に分けて。</li>
       <li>データは市場が開いている間、約30分ごとに自動更新（Fear &amp; Greed は数十分〜の遅れあり）。</li>
@@ -182,7 +182,7 @@ const INDICATORS = [
     },
   },
   {
-    key: 'vix', name: 'VIX（恐怖指数）', sub: 'Yahoo Finance ^VIX', digits: 2,
+    key: 'vix', name: 'VIX（恐怖指数）', sub: 'VIX指数', digits: 2,
     threshold: 30, zone: 'above',
     rule: '30超え（できれば40超え）→ ゆっくり下がり始めたら買い場',
     judge(s) {
@@ -212,7 +212,7 @@ const INDICATORS = [
     },
   },
   {
-    key: 'tnx', name: '米10年債利回り', sub: 'Yahoo Finance ^TNX（%）', digits: 2,
+    key: 'tnx', name: '米10年債利回り', sub: '米国債10年（%）', digits: 2,
     rule: '約1ヶ月で0.30%以上の低下 →「急低下」（リスクオフ）',
     judge(s) {
       const v = last(s).v
@@ -303,7 +303,7 @@ function render() {
     const v = last(s).v, pv = s.length > 1 ? last(s, 2).v : null
     return `<article class="card" data-key="${ind.key}">
       <div class="card-head">
-        <h2>${ind.name}<small>${ind.sub}</small></h2>
+        <h2>${ind.name}<small>${ind.sub}${src.source ? ` · ${src.source}` : ''}</small></h2>
         <span class="pill ${r.level}">${ICON[r.level]} ${r.label}</span>
       </div>
       <div class="value-row">

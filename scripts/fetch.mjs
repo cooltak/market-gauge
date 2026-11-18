@@ -70,12 +70,79 @@ async function yahooSeries(symbol, range = '6mo') {
   }
 }
 
+// ---------- CBOE 指数（VIX / TNX）----------
+// GitHub Actions の IP は Yahoo に 429 で弾かれやすいので、CBOE を第一候補にする
+async function cboeSeries(sym) {
+  const base = 'https://cdn.cboe.com/api/global/delayed_quotes'
+  const hist = await getJSON(`${base}/charts/historical/_${sym}.json`)
+  const rows = Array.isArray(hist?.data) ? hist.data : []
+  if (!rows.length) throw new Error(`CBOE ${sym}: historical の形式が想定外 keys=${Object.keys(hist || {})}`)
+  const map = new Map()
+  for (const r of rows) {
+    const v = parseFloat(r.close)
+    if (r.date && Number.isFinite(v)) map.set(String(r.date).slice(0, 10), v)
+  }
+  let updatedAt = null
+  try {
+    const q = (await getJSON(`${base}/quotes/_${sym}.json`))?.data
+    const price = parseFloat(q?.current_price)
+    const t = q?.last_trade_time
+    if (Number.isFinite(price) && t) {
+      map.set(String(t).slice(0, 10), price)
+      updatedAt = t
+    }
+  } catch (e) {
+    console.warn(`CBOE ${sym} quote: ${e.message}`)
+  }
+  const series = [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-130)
+    .map(([d, v]) => ({ d, v: round(v) }))
+  return { series, updatedAt, source: 'CBOE' }
+}
+
+// ---------- FRED（米10年債の公式日次データ、1営業日遅れ）----------
+async function fredSeries(id) {
+  const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}`, {
+    headers: { 'User-Agent': UA },
+  })
+  if (!res.ok) throw new Error(`FRED HTTP ${res.status}`)
+  const lines = (await res.text()).trim().split('\n').slice(1)
+  const series = lines
+    .map((l) => l.split(','))
+    .filter(([, v]) => v && v !== '.' && Number.isFinite(parseFloat(v)))
+    .map(([d, v]) => ({ d, v: parseFloat(v) }))
+    .slice(-130)
+  if (!series.length) throw new Error('FRED: データ空')
+  return { series, updatedAt: null, source: 'FRED' }
+}
+
+async function firstOk(label, fns) {
+  const errs = []
+  for (const fn of fns) {
+    try {
+      return await fn()
+    } catch (e) {
+      errs.push(e.message)
+      console.warn(`${label}: ${e.message}`)
+    }
+  }
+  throw new Error(errs.join(' / '))
+}
+
 async function fetchVix() {
-  return yahooSeries('^VIX')
+  return firstOk('vix', [
+    () => cboeSeries('VIX'),
+    async () => ({ ...(await yahooSeries('^VIX')), source: 'Yahoo' }),
+  ])
 }
 
 async function fetchTnx() {
-  const out = await yahooSeries('^TNX')
+  const out = await firstOk('tnx', [
+    () => cboeSeries('TNX'),
+    () => fredSeries('DGS10'),
+    async () => ({ ...(await yahooSeries('^TNX')), source: 'Yahoo' }),
+  ])
   // 昔の ^TNX は利回り×10（例: 42.5）で配信されていたので念のため補正
   const vals = out.series.map((p) => p.v).sort((a, b) => a - b)
   const median = vals[Math.floor(vals.length / 2)] ?? 0
