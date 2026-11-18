@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>買い場ゲージ</title>
+<meta name="description" content="プットコールレシオ・VIX・Fear & Greed・米10年債利回りで買い場を判定">
+<meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="買い場ゲージ">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root {
+  --bg: #f6f6f4;
+  --surface: #fcfcfb;
+  --border: #e4e3de;
+  --grid: #ecebe6;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #7a7974;
+  --line: #2a78d6;
+  --threshold: #8a8984;
+  --zone: rgba(12, 163, 12, 0.08);
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --good-bg: #e6f5e6;
+  --warn: #fab219;
+  --warn-ink: #7a5200;
+  --warn-bg: #fdf3dc;
+  --calm-ink: #52514e;
+  --calm-bg: #efeeea;
+  --hot: #d03b3b;
+  --hot-bg: #fbe9e9;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121211;
+    --surface: #1a1a19;
+    --border: #2e2e2c;
+    --grid: #262624;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --text-3: #8f8e86;
+    --line: #3987e5;
+    --threshold: #8f8e86;
+    --zone: rgba(12, 163, 12, 0.14);
+    --good-ink: #5fd35f;
+    --good-bg: #13301a;
+    --warn-ink: #fab219;
+    --warn-bg: #352a10;
+    --calm-ink: #c3c2b7;
+    --calm-bg: #252523;
+    --hot: #ec6a6a;
+    --hot-bg: #3a1b1b;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-feature-settings: "palt";
+}
+.wrap { max-width: 960px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px 40px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 8px 0 16px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: 0.02em; }
+.updated { font-size: 12px; color: var(--text-3); text-align: right; }
+.updated button {
+  margin-left: 6px; font: inherit; color: var(--text-2); background: none;
+  border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; cursor: pointer;
+}
+
+.summary {
+  border-radius: 16px; padding: 16px 18px; margin-bottom: 16px;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.summary.hot { background: var(--hot-bg); border-color: var(--hot); }
+.summary .big { font-size: 18px; font-weight: 700; }
+.summary .sub { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+.dots { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.dot {
+  font-size: 12px; padding: 3px 10px; border-radius: 999px;
+  background: var(--calm-bg); color: var(--calm-ink);
+}
+.dot.on { background: var(--good-bg); color: var(--good-ink); font-weight: 700; }
+.dot.watch { background: var(--warn-bg); color: var(--warn-ink); }
+
+.grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 16px 16px 12px; min-width: 0;
+}
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.card h2 { font-size: 14px; margin: 0; color: var(--text-2); font-weight: 600; }
+.card h2 small { display: block; font-weight: 400; color: var(--text-3); font-size: 11px; }
+.value-row { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 2px; flex-wrap: wrap; }
+.value { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.delta { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pill {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: var(--calm-bg); color: var(--calm-ink);
+}
+.pill.on { background: var(--good-bg); color: var(--good-ink); }
+.pill.watch { background: var(--warn-bg); color: var(--warn-ink); }
+.status-note { font-size: 13px; color: var(--text); margin: 4px 0 8px; min-height: 1.5em; }
+.rule { font-size: 12px; color: var(--text-3); border-top: 1px solid var(--grid); padding-top: 8px; margin-top: 4px; }
+.meta { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+.stale { color: var(--hot); }
+
+.chart { position: relative; height: 120px; margin: 4px 0; touch-action: pan-y; }
+.chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.chart .tip {
+  position: absolute; top: -6px; pointer-events: none; transform: translateX(-50%);
+  background: var(--text); color: var(--surface); font-size: 11px; padding: 2px 8px;
+  border-radius: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; display: none;
+}
+.axis { font-size: 10px; fill: var(--text-3); font-variant-numeric: tabular-nums; }
+
+.howto { margin-top: 24px; font-size: 13px; color: var(--text-2); }
+.howto summary { cursor: pointer; font-weight: 600; color: var(--text); }
+.howto li { margin: 4px 0; }
+.error { padding: 24px; text-align: center; color: var(--text-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>買い場ゲージ</h1>
+    <div class="updated"><span id="updated">読み込み中…</span><button id="reload" type="button">更新</button></div>
+  </header>
+  <section id="summary" class="summary" aria-live="polite"></section>
+  <section id="cards" class="grid"></section>
+
+  <details class="howto">
+    <summary>判定ルールと使い方</summary>
+    <ul>
+      <li><b>プットコールレシオ</b>：1.15以上で「弱気に傾きすぎ」＝反転しやすい（CBOE Total）。</li>
+      <li><b>VIX</b>：20台はまだ恐怖不足。30超え（できれば40超え）まで上がり、そこから下がり始めたら買い場サイン。</li>
+      <li><b>Fear &amp; Greed</b>：25以下（Extreme Fear）で点灯。</li>
+      <li><b>米10年債利回り</b>：約1ヶ月（20営業日）で0.30%以上低下したら「急低下」で点灯。</li>
+      <li>🔥 <b>最強シグナル</b>：「VIXが高値から低下」＋「10年債利回りが急低下」が同時に点灯。</li>
+      <li>一時的な急変はダマシのことも。3〜5日の流れで確認し、エントリーは3〜5回に分けて。</li>
+      <li>データは市場が開いている間、約30分ごとに自動更新（Fear &amp; Greed は数十分〜の遅れあり）。</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+const fmt = (v, n = 2) => (v == null || Number.isNaN(v) ? '–' : Number(v).toFixed(n))
+const signed = (v, n = 2) => (v == null ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v).toFixed(n))
+const md = (d) => { const [, m, dd] = d.split('-'); return `${+m}/${+dd}` }
+const last = (s, k = 1) => s[s.length - k]
+
+const FG_LABEL = {
+  'extreme fear': '極度の恐怖', fear: '恐怖', neutral: '中立', greed: '強欲', 'extreme greed': '極度の強欲',
+}
+
+// ---- 判定ロジック（記事の基準） ----
+const INDICATORS = [
+  {
+    key: 'putCall', name: 'プット・コール・レシオ', sub: 'CBOE Total Put/Call', digits: 2,
+    threshold: 1.15, zone: 'above',
+    rule: '1.15以上で「弱気に傾きすぎ」→ 反転しやすい',
+    judge(s) {
+      const v = last(s).v
+      const avg5 = s.slice(-5).reduce((a, p) => a + p.v, 0) / Math.min(5, s.length)
+      const eq = last(s).equity
+      const extra = `5日平均 ${fmt(avg5)}${eq != null ? ` ／ 個別株 ${fmt(eq)}` : ''}`
+      if (v >= 1.15) return { level: 'on', label: '買い場サイン', note: `弱気に傾きすぎ。${extra}` }
+      if (v >= 1.0 || avg5 >= 1.0) return { level: 'watch', label: '弱気寄り', note: `1を超えて弱気が増加中。${extra}` }
+      return { level: 'calm', label: '平常', note: `まだ楽観寄り。${extra}` }
+    },
+  },
+  {
+    key: 'vix', name: 'VIX（恐怖指数）', sub: 'Yahoo Finance ^VIX', digits: 2,
+    threshold: 30, zone: 'above',
+    rule: '30超え（できれば40超え）→ ゆっくり下がり始めたら買い場',
+    judge(s) {
+      const v = last(s).v
+      const win = s.slice(-30)
+      const peak = Math.max(...win.map((p) => p.v))
+      const v3 = s.length > 3 ? last(s, 4).v : v
+      if (peak >= 30 && v < peak * 0.9 && v < v3)
+        return { level: 'on', label: '買い場サイン', note: `高値 ${fmt(peak)} から低下中（ピークアウト）` }
+      if (v >= 40) return { level: 'watch', label: '恐怖が非常に高い', note: '下がり始めを待つ局面' }
+      if (v >= 30) return { level: 'watch', label: '恐怖ピーク圏', note: '30超え。下がり始めを待つ' }
+      if (v >= 20) return { level: 'calm', label: '恐怖不足', note: '20台はまだ恐怖が足りない' }
+      return { level: 'calm', label: '平穏', note: '市場は落ち着いている' }
+    },
+  },
+  {
+    key: 'fearGreed', name: 'Fear & Greed Index', sub: 'CNN', digits: 0,
+    threshold: 25, zone: 'below', min: 0, max: 100,
+    rule: '25以下（Extreme Fear）で点灯',
+    judge(s, d) {
+      const v = last(s).v
+      const jp = FG_LABEL[d.rating] || d.rating || ''
+      const prev = d.previousWeek != null ? `／1週間前 ${fmt(d.previousWeek, 0)}` : ''
+      if (v <= 25) return { level: 'on', label: '買い場サイン', note: `${jp}${prev}` }
+      if (v <= 45) return { level: 'watch', label: '恐怖', note: `${jp}。25以下まで落ちるか注目${prev}` }
+      return { level: 'calm', label: v <= 55 ? '中立' : '強欲', note: `${jp}${prev}` }
+    },
+  },
+  {
+    key: 'tnx', name: '米10年債利回り', sub: 'Yahoo Finance ^TNX（%）', digits: 2,
+    rule: '約1ヶ月で0.30%以上の低下 →「急低下」（リスクオフ）',
+    judge(s) {
+      const v = last(s).v
+      const base = s.length > 20 ? last(s, 21).v : s[0].v
+      const ch = v - base
+      const note = `1ヶ月で ${signed(ch)}%`
+      if (ch <= -0.3) return { level: 'on', label: '急低下', note: `${note}。投資家が債券に避難中` }
+      if (ch <= -0.15) return { level: 'watch', label: '低下傾向', note }
+      return { level: 'calm', label: ch >= 0.15 ? '上昇' : '横ばい', note }
+    },
+  },
+]
+
+// ---- ミニチャート（SVG） ----
+function sparkline(el, series, ind) {
+  const s = series.slice(-65) // 約3ヶ月
+  const W = el.clientWidth || 300, H = el.clientHeight || 120
+  const pad = { l: 4, r: 34, t: 10, b: 16 }
+  const vals = s.map((p) => p.v)
+  let lo = ind.min ?? Math.min(...vals), hi = ind.max ?? Math.max(...vals)
+  if (ind.threshold != null && ind.min == null) { lo = Math.min(lo, ind.threshold); hi = Math.max(hi, ind.threshold) }
+  const span = hi - lo || 1
+  if (ind.min == null) { lo -= span * 0.08; hi += span * 0.08 }
+  const x = (i) => pad.l + (i / Math.max(1, s.length - 1)) * (W - pad.l - pad.r)
+  const y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (H - pad.t - pad.b)
+  const path = s.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join('')
+  let zone = '', thr = ''
+  if (ind.threshold != null) {
+    const ty = y(ind.threshold)
+    const zy = ind.zone === 'above' ? pad.t : ty
+    const zh = ind.zone === 'above' ? ty - pad.t : H - pad.b - ty
+    zone = `<rect x="${pad.l}" y="${zy}" width="${W - pad.l - pad.r}" height="${Math.max(0, zh)}" fill="var(--zone)"/>`
+    thr = `<line x1="${pad.l}" x2="${W - pad.r}" y1="${ty}" y2="${ty}" stroke="var(--threshold)" stroke-width="1" stroke-dasharray="3 3"/>
+      <text class="axis" x="${W - pad.r + 4}" y="${ty + 3}">${ind.threshold}</text>`
+  }
+  const lp = s.length - 1
+  el.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${ind.name} 直近3ヶ月の推移">
+      ${zone}${thr}
+      <text class="axis" x="${pad.l}" y="${H - 2}">${md(s[0].d)}</text>
+      <text class="axis" x="${W - pad.r}" y="${H - 2}" text-anchor="end">${md(s[lp].d)}</text>
+      <path d="${path}" fill="none" stroke="var(--line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(lp)}" cy="${y(s[lp].v)}" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"/>
+      <g class="hover" style="display:none">
+        <line y1="${pad.t}" y2="${H - pad.b}" stroke="var(--text-3)" stroke-width="1"/>
+        <circle r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"/>
+      </g>
+    </svg><div class="tip"></div>`
+  const svg = el.querySelector('svg'), g = el.querySelector('.hover'), tip = el.querySelector('.tip')
+  const show = (clientX) => {
+    const r = svg.getBoundingClientRect()
+    const px = ((clientX - r.left) / r.width) * W
+    const i = Math.max(0, Math.min(lp, Math.round(((px - pad.l) / (W - pad.l - pad.r)) * lp)))
+    const cx = x(i), cy = y(s[i].v)
+    g.style.display = ''
+    g.querySelector('line').setAttribute('x1', cx); g.querySelector('line').setAttribute('x2', cx)
+    g.querySelector('circle').setAttribute('cx', cx); g.querySelector('circle').setAttribute('cy', cy)
+    tip.style.display = 'block'
+    tip.style.left = `${(cx / W) * 100}%`
+    tip.textContent = `${md(s[i].d)}  ${fmt(s[i].v, ind.digits)}`
+  }
+  const hide = () => { g.style.display = 'none'; tip.style.display = 'none' }
+  el.onpointermove = (e) => show(e.clientX)
+  el.onpointerdown = (e) => show(e.clientX)
+  el.onpointerleave = hide
+  el.onpointerup = (e) => { if (e.pointerType !== 'mouse') setTimeout(hide, 1500) }
+}
+
+// ---- 描画 ----
+let DATA = null
+const ICON = { on: '●', watch: '▲', calm: '–' }
+
+function dataDate(d, key) {
+  const p = last(d.series)
+  const stale = d.stale ? ' <span class="stale">⚠ 取得失敗・前回値</span>' : ''
+  return `データ日 ${md(p.d)}（米国）${stale}`
+}
+
+function render() {
+  const d = DATA
+  const results = {}
+  document.getElementById('cards').innerHTML = INDICATORS.map((ind) => {
+    const src = d[ind.key]
+    if (!src?.series?.length) return `<article class="card"><h2>${ind.name}</h2><p class="error">データなし</p></article>`
+    const s = src.series
+    const r = ind.judge(s, src)
+    results[ind.key] = r
+    const v = last(s).v, pv = s.length > 1 ? last(s, 2).v : null
+    return `<article class="card" data-key="${ind.key}">
+      <div class="card-head">
+        <h2>${ind.name}<small>${ind.sub}</small></h2>
+        <span class="pill ${r.level}">${ICON[r.level]} ${r.label}</span>
+      </div>
+      <div class="value-row">
+        <span class="value">${fmt(v, ind.digits)}</span>
+        <span class="delta">前日比 ${signed(pv == null ? null : v - pv, ind.digits)}</span>
+      </div>
+      <div class="status-note">${r.note}</div>
+      <div class="chart" id="chart-${ind.key}"></div>
+      <div class="rule">基準：${ind.rule}</div>
+      <div class="meta">${dataDate(src, ind.key)}</div>
+    </article>`
+  }).join('')
+
+  for (const ind of INDICATORS) {
+    const el = document.getElementById(`chart-${ind.key}`)
+    if (el && d[ind.key]?.series?.length) sparkline(el, d[ind.key].series, ind)
+  }
+
+  const on = INDICATORS.filter((i) => results[i.key]?.level === 'on')
+  const strongest = results.vix?.level === 'on' && results.tnx?.level === 'on'
+  const sum = document.getElementById('summary')
+  sum.className = 'summary' + (strongest ? ' hot' : '')
+  let big, sub
+  if (strongest) {
+    big = '🔥 最強の買いシグナル点灯'
+    sub = 'VIXが高値から低下 ＋ 10年債利回りが急低下。分割で買い向かう局面です。'
+  } else if (on.length >= 3) {
+    big = `● 4指標中 ${on.length}個が買い場サイン`
+    sub = '市場はかなり恐怖に傾いています。テクニカル（50日線・出来高）も確認を。'
+  } else if (on.length >= 1) {
+    big = `● 4指標中 ${on.length}個が買い場サイン`
+    sub = '一部で恐怖が出ています。まだ「もうはまだなり」の可能性も。'
+  } else {
+    big = '– 買い場サインなし'
+    sub = '今は恐怖が足りない状態。いつもどおり積立でOK。'
+  }
+  sum.innerHTML = `<div class="big">${big}</div><div class="sub">${sub}</div>
+    <div class="dots">${INDICATORS.map((i) => {
+      const r = results[i.key]
+      return `<span class="dot ${r?.level || ''}">${r ? ICON[r.level] : '?'} ${i.name.replace(/（.*）/, '')}</span>`
+    }).join('')}</div>`
+
+  const t = new Date(d.generatedAt)
+  const jst = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(t)
+  const ago = Math.round((Date.now() - t) / 60000)
+  const agoTxt = ago < 60 ? `${ago}分前` : ago < 1440 ? `${Math.round(ago / 60)}時間前` : `${Math.round(ago / 1440)}日前`
+  document.getElementById('updated').textContent = `${jst} 取得（${agoTxt}）`
+}
+
+async function load() {
+  try {
+    const res = await fetch(`data.json?t=${Date.now()}`, { cache: 'no-store' })
+    if (!res.ok) throw new Error(res.status)
+    DATA = await res.json()
+    render()
+  } catch (e) {
+    document.getElementById('cards').innerHTML = `<p class="error">データを読み込めませんでした（${e.message}）</p>`
+    document.getElementById('updated').textContent = '読み込み失敗'
+  }
+}
+
+document.getElementById('reload').onclick = load
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load() })
+setInterval(() => { if (!document.hidden) load() }, 10 * 60 * 1000)
+let rt
+addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => DATA && render(), 150) })
+load()
+</script>
+</body>
+</html>
