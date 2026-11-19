@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>買い場ゲージ</title>
 <meta name="description" content="プットコールレシオ・VIX・Fear & Greed・米10年債利回りで買い場を判定">
-<meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f6f4">
+<meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="買い場ゲージ">
@@ -15,6 +15,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <style>
 :root {
+  color-scheme: light;
   --bg: #f6f6f4;
   --surface: #fcfcfb;
   --border: #e4e3de;
@@ -37,30 +38,6 @@
   --calm-bg: #efeeea;
   --hot: #d03b3b;
   --hot-bg: #fbe9e9;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121211;
-    --surface: #1a1a19;
-    --border: #2e2e2c;
-    --grid: #262624;
-    --text: #f0efec;
-    --text-2: #c3c2b7;
-    --text-3: #8f8e86;
-    --line: #3987e5;
-    --s2: #d95926;
-    --s3: #199e70;
-    --threshold: #8f8e86;
-    --zone: rgba(12, 163, 12, 0.14);
-    --good-ink: #5fd35f;
-    --good-bg: #13301a;
-    --warn-ink: #fab219;
-    --warn-bg: #352a10;
-    --calm-ink: #c3c2b7;
-    --calm-bg: #252523;
-    --hot: #ec6a6a;
-    --hot-bg: #3a1b1b;
-  }
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
