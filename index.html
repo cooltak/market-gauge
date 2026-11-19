@@ -400,8 +400,11 @@ function render() {
     big = `● ${INDICATORS.length}指標中 ${on.length}個が恐怖サイン`
     sub = '一部で恐怖が出ています。まだ「もうはまだなり」の可能性も。'
   } else {
+    const watch = INDICATORS.filter((i) => results[i.key]?.level === 'watch').length
     big = '– 買い場サインなし'
-    sub = '今は恐怖が足りない状態。いつもどおり積立でOK。'
+    sub = watch >= 2
+      ? `恐怖が高まりつつあります（注目 ${watch}個）。まだ点灯はなし、引き続き観察を。`
+      : '今は恐怖が足りない状態。いつもどおり積立でOK。'
   }
   sum.innerHTML = `<div class="big">${big}</div><div class="sub">${sub}</div>
     <div class="dots">${INDICATORS.map((i) => {
