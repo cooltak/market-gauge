@@ -72,7 +72,7 @@ async function yahooSeries(symbol, range = '6mo') {
 
 // ---------- CBOE 指数（VIX / TNX）----------
 // GitHub Actions の IP は Yahoo に 429 で弾かれやすいので、CBOE を第一候補にする
-async function cboeSeries(sym) {
+async function cboeSeries(sym, keep = 130) {
   const base = 'https://cdn.cboe.com/api/global/delayed_quotes'
   const hist = await getJSON(`${base}/charts/historical/_${sym}.json`)
   const rows = Array.isArray(hist?.data) ? hist.data : []
@@ -96,7 +96,7 @@ async function cboeSeries(sym) {
   }
   const series = [...map.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .slice(-130)
+    .slice(-keep)
     .map(([d, v]) => ({ d, v: round(v) }))
   return { series, updatedAt, source: 'CBOE' }
 }
@@ -228,6 +228,91 @@ async function fetchPutCall(prev) {
   return { series, updatedAt: new Date().toISOString(), fetchedDays: fetched }
 }
 
+// ---------- S&P500 と移動平均線 ----------
+async function fetchSpx() {
+  const out = await firstOk('spx', [
+    () => cboeSeries('SPX', 330),
+    async () => ({ ...(await yahooSeries('^GSPC', '2y')), source: 'Yahoo' }),
+  ])
+  const s = out.series
+  if (s.length < 200) throw new Error(`S&P500: 200日分に足りない（${s.length}件）`)
+  const ma = (i, n) => {
+    if (i + 1 < n) return null
+    let sum = 0
+    for (let j = i + 1 - n; j <= i; j++) sum += s[j].v
+    return round(sum / n)
+  }
+  out.series = s.map((p, i) => ({ ...p, ma50: ma(i, 50), ma200: ma(i, 200) })).slice(-130)
+  return out
+}
+
+// ---------- AAII センチメント調査（週次）----------
+const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 }
+const pct = (t) => {
+  const v = parseFloat(String(t).replace(/[^\d.\-]/g, ''))
+  return Number.isFinite(v) ? v : null
+}
+const iso = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+
+function parseAaiiHtml(html) {
+  const text = (h) => h.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+  const rows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map((m) =>
+    [...m[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((c) => text(c[1])),
+  )
+  const now = new Date(nyDate(new Date()) + 'T12:00:00Z')
+  let year = now.getUTCFullYear()
+  let prevMonth = null
+  const out = []
+  for (const r of rows) {
+    if (r.length < 4 || !r.slice(1, 4).every((c) => /%/.test(c))) continue
+    const bull = pct(r[1]), neutral = pct(r[2]), bear = pct(r[3])
+    if (bull == null || bear == null) continue
+    let d = null
+    let m = r[0].match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/) // 11/12/2026
+    if (m) {
+      const y = +m[3] < 100 ? 2000 + +m[3] : +m[3]
+      d = iso(y, +m[1] - 1, +m[2])
+    } else if ((m = r[0].match(/([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})(?:,?\s+(\d{4}))?/))) {
+      const mon = MONTHS[m[1].toLowerCase()]
+      if (mon == null) continue
+      if (m[3]) year = +m[3]
+      else {
+        // 年が書かれていない表は新しい順に並ぶ前提で年をさかのぼる
+        if (prevMonth != null && mon > prevMonth) year--
+        if (!out.length && new Date(Date.UTC(year, mon, +m[2])) > new Date(now.getTime() + 3 * 86400000)) year--
+      }
+      prevMonth = mon
+      d = iso(year, mon, +m[2])
+    }
+    if (d) out.push({ d, v: round(bull - bear, 1), bull, neutral, bear })
+  }
+  return out
+}
+
+async function fetchAaii(prev) {
+  const res = await fetch('https://www.aaii.com/sentimentsurvey/sent_results', {
+    headers: {
+      'User-Agent': UA,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+  })
+  if (!res.ok) throw new Error(`AAII HTTP ${res.status}`)
+  const html = await res.text()
+  const rows = parseAaiiHtml(html)
+  if (!rows.length) {
+    const title = html.match(/<title>([\s\S]*?)<\/title>/i)?.[1]?.trim()
+    const i = html.search(/bullish/i)
+    throw new Error(
+      `AAII: 表を読み取れず（${html.length}文字, title=${title}, 抜粋=${JSON.stringify(html.slice(Math.max(0, i - 200), i + 400))}）`,
+    )
+  }
+  const have = new Map((prev?.series || []).map((p) => [p.d, p]))
+  for (const r of rows) have.set(r.d, r)
+  const series = [...have.values()].sort((a, b) => a.d.localeCompare(b.d)).slice(-104)
+  return { series, updatedAt: new Date().toISOString(), source: 'AAII' }
+}
+
 // ---------- main ----------
 async function main() {
   let prev = {}
@@ -241,6 +326,8 @@ async function main() {
     tnx: () => fetchTnx(),
     fearGreed: () => fetchFearGreed(),
     putCall: () => fetchPutCall(prev.putCall),
+    aaii: () => fetchAaii(prev.aaii),
+    spx: () => fetchSpx(),
   }
   let ok = 0
   // ONLY=putCall,vix のように指定すると一部だけ取得（テスト用）
