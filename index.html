@@ -42,6 +42,7 @@
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
+  overscroll-behavior-y: contain;
   margin: 0;
   background: var(--bg);
   color: var(--text);
@@ -51,13 +52,21 @@ body {
 }
 .wrap { max-width: 960px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px 40px; }
 header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 8px 0 16px; }
-h1 { font-size: 22px; margin: 0; letter-spacing: 0.02em; }
+h1 { font-size: 22px; margin: 0; white-space: nowrap; flex-shrink: 0; letter-spacing: 0.02em; }
 .updated { font-size: 12px; color: var(--text-3); text-align: right; }
 .updated button {
   margin-left: 6px; font: inherit; color: var(--text-2); background: none;
   border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; cursor: pointer;
 }
 
+.ptr {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 8px); z-index: 10;
+  transform: translate(-50%, -80px); transition: transform 0.2s ease;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text-2);
+  font-size: 12px; padding: 6px 14px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  pointer-events: none; white-space: nowrap;
+}
+.ptr.dragging { transition: none; }
 .market { font-size: 12px; color: var(--text-2); margin: -8px 0 12px; }
 .market b { font-weight: 700; }
 .market .open { color: var(--good-ink); }
@@ -120,6 +129,7 @@ h1 { font-size: 22px; margin: 0; letter-spacing: 0.02em; }
 </style>
 </head>
 <body>
+<div id="ptr" class="ptr" aria-live="polite">↓ 引っぱって更新</div>
 <div class="wrap">
   <header>
     <h1>買い場ゲージ</h1>
@@ -400,7 +410,7 @@ function render() {
   }).format(t)
   const ago = Math.round((Date.now() - t) / 60000)
   const agoTxt = ago < 60 ? `${ago}分前` : ago < 1440 ? `${Math.round(ago / 60)}時間前` : `${Math.round(ago / 1440)}日前`
-  document.getElementById('updated').textContent = `${jst} 取得（${agoTxt}）`
+  document.getElementById('updated').textContent = `${jst}（${agoTxt}）`
   renderMarket()
 }
 
@@ -427,7 +437,7 @@ function renderMarket() {
   const jst = new Intl.DateTimeFormat('ja-JP', {
     timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit',
   }).format(t)
-  el.innerHTML = `<b>– 米国市場クローズ中</b>・次の更新は ${jst} ごろ（日本時間）から`
+  el.innerHTML = `<b>– 米国市場クローズ中</b>・次の更新は ${jst}ごろ〜`
 }
 
 async function load() {
@@ -442,7 +452,46 @@ async function load() {
   }
 }
 
-document.getElementById('reload').onclick = load
+// ---- 引っぱって更新（ホーム画面アプリではブラウザの機能が使えないため自前で実装）----
+const ptr = document.getElementById('ptr')
+const PTR_TRIGGER = 70
+let ptrStart = null, ptrDist = 0, refreshing = false
+const ptrShow = (y) => { ptr.style.transform = `translate(-50%, ${y}px)` }
+const ptrHide = () => { ptr.classList.remove('dragging'); ptrShow(-80) }
+
+async function refresh() {
+  if (refreshing) return
+  refreshing = true
+  ptr.classList.remove('dragging')
+  ptr.textContent = '更新中…'
+  ptrShow(0)
+  await load()
+  ptr.textContent = DATA ? '✓ 最新のデータです' : '読み込み失敗'
+  setTimeout(() => { ptrHide(); refreshing = false }, 900)
+}
+
+addEventListener('touchstart', (e) => {
+  if (refreshing || scrollY > 0 || e.touches.length !== 1) return
+  ptrStart = e.touches[0].clientY
+  ptrDist = 0
+}, { passive: true })
+addEventListener('touchmove', (e) => {
+  if (ptrStart == null) return
+  ptrDist = (e.touches[0].clientY - ptrStart) * 0.5
+  if (ptrDist <= 0 || scrollY > 0) { ptrStart = null; ptrHide(); return }
+  e.preventDefault()
+  ptr.classList.add('dragging')
+  ptr.textContent = ptrDist >= PTR_TRIGGER ? '↑ 離して更新' : '↓ 引っぱって更新'
+  ptrShow(Math.min(ptrDist, PTR_TRIGGER + 20) - 80)
+}, { passive: false })
+addEventListener('touchend', () => {
+  if (ptrStart == null) return
+  ptrStart = null
+  if (ptrDist >= PTR_TRIGGER) refresh()
+  else ptrHide()
+})
+
+document.getElementById('reload').onclick = refresh
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load() })
 setInterval(() => { if (!document.hidden) load() }, 10 * 60 * 1000)
 let rt
