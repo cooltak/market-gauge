@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-20T01:33:04.038Z",
+ "generatedAt": "2026-11-20T21:00:40.077Z",
  "errors": {
   "vix": "HTTP 403 https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/_VIX.json / HTTP 429 https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX?range=6mo&interval=1d",
   "tnx": "HTTP 403 https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/_TNX.json / fetch failed / HTTP 429 https://query2.finance.yahoo.com/v8/finance/chart/%5ETNX?range=6mo&interval=1d",
@@ -1062,10 +1062,6 @@
  "fearGreed": {
   "series": [
    {
-    "d": "2026-05-18",
-    "v": 59.3
-   },
-   {
     "d": "2026-05-19",
     "v": 60.5
    },
@@ -1575,18 +1571,22 @@
    },
    {
     "d": "2026-11-18",
-    "v": 18.7
+    "v": 15.9
    },
    {
     "d": "2026-11-19",
-    "v": 18.7
+    "v": 9.8
+   },
+   {
+    "d": "2026-11-20",
+    "v": 9.8
    }
   ],
   "rating": "extreme fear",
-  "previousClose": 24.6,
-  "previousWeek": 40.3,
-  "previousMonth": 19.5,
-  "updatedAt": "2026-11-19T23:59:41.000Z"
+  "previousClose": 18.7,
+  "previousWeek": 37.4,
+  "previousMonth": 28.7,
+  "updatedAt": "2026-11-20T20:59:59.000Z"
  },
  "putCall": {
   "series": [
@@ -2141,9 +2141,15 @@
     "v": 1.05,
     "equity": 0.72,
     "index": 1.14
+   },
+   {
+    "d": "2026-11-19",
+    "v": 1.01,
+    "equity": 0.62,
+    "index": 1.2
    }
   ],
-  "updatedAt": "2026-11-20T01:34:18.084Z",
+  "updatedAt": "2026-11-20T21:01:53.978Z",
   "fetchedDays": 1
  },
  "aaii": {
@@ -2303,7 +2309,7 @@
     "bear": 42.2
    }
   ],
-  "updatedAt": "2026-11-20T01:34:18.375Z",
+  "updatedAt": "2026-11-20T21:01:54.177Z",
   "source": "AAII"
  },
  "spx": {
