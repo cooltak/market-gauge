@@ -1,6 +1,10 @@
 {
- "generatedAt": "2026-11-19T21:07:16.877Z",
- "errors": {},
+ "generatedAt": "2026-11-20T01:33:04.038Z",
+ "errors": {
+  "vix": "HTTP 403 https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/_VIX.json / HTTP 429 https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX?range=6mo&interval=1d",
+  "tnx": "HTTP 403 https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/_TNX.json / fetch failed / HTTP 429 https://query2.finance.yahoo.com/v8/finance/chart/%5ETNX?range=6mo&interval=1d",
+  "spx": "HTTP 403 https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/_SPX.json / HTTP 429 https://query2.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=2y&interval=1d"
+ },
  "vix": {
   "series": [
    {
@@ -525,7 +529,8 @@
    }
   ],
   "updatedAt": "2026-11-19T15:51:31",
-  "source": "CBOE"
+  "source": "CBOE",
+  "stale": true
  },
  "tnx": {
   "series": [
@@ -1051,7 +1056,8 @@
    }
   ],
   "updatedAt": "2026-11-19T13:59:55.343000-06:00",
-  "source": "CBOE"
+  "source": "CBOE",
+  "stale": true
  },
  "fearGreed": {
   "series": [
@@ -1569,18 +1575,18 @@
    },
    {
     "d": "2026-11-18",
-    "v": 19
+    "v": 18.7
    },
    {
     "d": "2026-11-19",
-    "v": 19.3
+    "v": 18.7
    }
   ],
   "rating": "extreme fear",
   "previousClose": 24.6,
   "previousWeek": 40.3,
   "previousMonth": 19.5,
-  "updatedAt": "2026-11-19T20:59:59.000Z"
+  "updatedAt": "2026-11-19T23:59:41.000Z"
  },
  "putCall": {
   "series": [
@@ -2137,7 +2143,7 @@
     "index": 1.14
    }
   ],
-  "updatedAt": "2026-11-19T21:07:18.387Z",
+  "updatedAt": "2026-11-20T01:34:18.084Z",
   "fetchedDays": 1
  },
  "aaii": {
@@ -2297,7 +2303,7 @@
     "bear": 42.2
    }
   ],
-  "updatedAt": "2026-11-19T21:07:18.509Z",
+  "updatedAt": "2026-11-20T01:34:18.375Z",
   "source": "AAII"
  },
  "spx": {
@@ -3084,6 +3090,7 @@
    }
   ],
   "updatedAt": "2026-11-19T15:51:40",
-  "source": "CBOE"
+  "source": "CBOE",
+  "stale": true
  }
 }
