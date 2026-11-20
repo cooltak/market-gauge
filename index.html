@@ -58,6 +58,9 @@ h1 { font-size: 22px; margin: 0; letter-spacing: 0.02em; }
   border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; cursor: pointer;
 }
 
+.market { font-size: 12px; color: var(--text-2); margin: -8px 0 12px; }
+.market b { font-weight: 700; }
+.market .open { color: var(--good-ink); }
 .summary {
   border-radius: 16px; padding: 16px 18px; margin-bottom: 16px;
   background: var(--surface); border: 1px solid var(--border);
@@ -120,8 +123,9 @@ h1 { font-size: 22px; margin: 0; letter-spacing: 0.02em; }
 <div class="wrap">
   <header>
     <h1>買い場ゲージ</h1>
-    <div class="updated"><span id="updated">読み込み中…</span><button id="reload" type="button">更新</button></div>
+    <div class="updated"><span id="updated">読み込み中…</span><button id="reload" type="button">再読み込み</button></div>
   </header>
+  <div id="market" class="market"></div>
   <section id="summary" class="summary" aria-live="polite"></section>
   <section id="cards" class="grid"></section>
   <h2 class="section-title">テクニカル確認</h2>
@@ -397,6 +401,33 @@ function render() {
   const ago = Math.round((Date.now() - t) / 60000)
   const agoTxt = ago < 60 ? `${ago}分前` : ago < 1440 ? `${Math.round(ago / 60)}時間前` : `${Math.round(ago / 1440)}日前`
   document.getElementById('updated').textContent = `${jst} 取得（${agoTxt}）`
+  renderMarket()
+}
+
+// ---- 米国市場の開閉と次の更新時刻 ----
+const nyParts = (t) => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
+  }).formatToParts(t).map((x) => [x.type, x.value]))
+  return { wd: p.weekday, min: +p.hour * 60 + +p.minute }
+}
+const isOpen = (t) => {
+  const { wd, min } = nyParts(t)
+  return !['Sat', 'Sun'].includes(wd) && min >= 570 && min < 960 // 9:30〜16:00（祝日は考慮しない）
+}
+function renderMarket() {
+  const el = document.getElementById('market')
+  const now = new Date()
+  if (isOpen(now)) {
+    el.innerHTML = '<b class="open">● 米国市場オープン中</b>・約15〜30分ごとに自動更新'
+    return
+  }
+  let t = new Date(Math.ceil(now / 60000) * 60000)
+  for (let i = 0; i < 4 * 24 * 60 && !isOpen(t); i++) t = new Date(t.getTime() + 60000)
+  const jst = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit',
+  }).format(t)
+  el.innerHTML = `<b>– 米国市場クローズ中</b>・次の更新は ${jst} ごろ（日本時間）から`
 }
 
 async function load() {
