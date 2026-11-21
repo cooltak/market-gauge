@@ -196,12 +196,21 @@ async function cnbcQuote(sym) {
   if (!Number.isFinite(v) || !t) throw new Error(`CNBC ${sym}: 値なし`)
   // last_time は取引所の現地時刻（例 2026-11-20T16:59:00.000-0500）や日付のみで来るので、先頭の日付をそのまま使う
   const d = /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : nyDate(new Date(t))
-  return { d, v: round(v, 3), t: String(t) }
+  const pc = parseFloat(String(q?.previous_day_closing ?? '').replace(/[^\d.\-]/g, ''))
+  return { d, v: round(v, 3), t: String(t), pc: Number.isFinite(pc) ? round(pc, 3) : null }
 }
 
 function appendPoint(series, q, keep = 130) {
   const map = new Map((series || []).map((p) => [p.d, p.v]))
   map.set(q.d, q.v)
+  // ひとつ前の日の値を、CNBC の「前日の終値」で上書きする（場中の値や日付の取り違えで入った値を自動で直す。
+  // 2026-11-21: 11/20 の場中の値が 11/19 の欄に残っていた）。前の日が4日以上離れている（欠けた日がある）時は触らない
+  if (q.pc != null) {
+    const prevD = [...map.keys()].filter((d) => d < q.d).sort().at(-1)
+    if (prevD && (Date.parse(q.d) - Date.parse(prevD)) / 86400e3 <= 4 && Math.abs(q.pc / map.get(prevD) - 1) < 0.05) {
+      map.set(prevD, q.pc)
+    }
+  }
   return [...map.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-keep)
