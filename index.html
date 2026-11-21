@@ -146,6 +146,9 @@ h1 { font-size: 22px; margin: 0; white-space: nowrap; flex-shrink: 0; letter-spa
 }
 .legend { display: flex; gap: 12px; font-size: 11px; color: var(--text-2); margin-top: 2px; }
 .legend i { display: inline-block; width: 12px; height: 2px; vertical-align: middle; margin-right: 4px; border-radius: 1px; }
+/* 線ではない凡例（点・三角・面・棒）。グラフ上の形と同じ形で示す */
+.legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; box-sizing: border-box; }
+.legend svg { display: inline-block; vertical-align: -1px; margin-right: 4px; }
 .section-title { font-size: 13px; color: var(--text-2); font-weight: 700; margin: 20px 0 8px; }
 .axis { font-size: 10px; fill: var(--text-3); font-variant-numeric: tabular-nums; }
 
@@ -543,9 +546,9 @@ function sparkline(el, series, ind) {
 // ---- ディストリビューション／フォロースルーのグラフ（上: S&P500 と出来事の印・背景は状態／下: DD の個数）----
 function ibdChart(el, all) {
   const s = all.slice(-65) // 約3ヶ月
-  const W = el.clientWidth || 300, H = el.clientHeight || 190
+  const W = el.clientWidth || 300, H = el.clientHeight || 200
   const pad = { l: 4, r: 34, t: 10, b: 16 }
-  const barH = 44, gap = 8
+  const barH = 44, gap = 16
   const pTop = pad.t, pBot = H - pad.b - barH - gap // 価格の段
   const bTop = H - pad.b - barH, bBot = H - pad.b // DD の段
   const vals = s.map((p) => p.v).filter((v) => v != null)
@@ -571,6 +574,10 @@ function ibdChart(el, all) {
     if (p.ev.includes('correction')) m += `<line x1="${cx}" x2="${cx}" y1="${pTop}" y2="${bBot}" stroke="var(--hot)" stroke-width="1" stroke-dasharray="3 2"/><text class="axis" x="${cx}" y="${pTop + 8}" text-anchor="middle" fill="var(--hot)">調整入り</text>`
     return m
   }).join('')
+  // フォロースルーの日は、それより前の DD を数え直す（棒が下がるのは売りが止んだからではない）。その印
+  const resets = s.map((p, i) => !p.ev.includes('ftd') ? '' :
+    `<line x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${bTop}" y2="${bBot}" stroke="var(--good)" stroke-width="1" stroke-dasharray="2 2"/>
+     <text class="axis" x="${(x(i) + (x(i) + 52 > W - pad.r ? -3 : 3)).toFixed(1)}" y="${bTop - 3}" text-anchor="${x(i) + 52 > W - pad.r ? 'end' : 'start'}" fill="var(--good-ink)">↺数え直し</text>`).join('')
   const lvl = (n, c) => `<line x1="${pad.l}" x2="${W - pad.r}" y1="${by(n)}" y2="${by(n)}" stroke="${c}" stroke-width="1" stroke-dasharray="3 3"/><text class="axis" x="${W - pad.r + 4}" y="${by(n) + 3}">${n}</text>`
   const lp = s.length - 1
   el.innerHTML = `
@@ -578,8 +585,8 @@ function ibdChart(el, all) {
       ${bands}
       <line x1="${pad.l}" x2="${W - pad.r}" y1="${bBot}" y2="${bBot}" stroke="var(--grid)" stroke-width="1"/>
       ${lvl(IBD.pressureAt, 'var(--warn)')}${lvl(IBD.correctionAt, 'var(--hot)')}
-      <text class="axis" x="${W - pad.r + 4}" y="${bTop - 2}">DD数</text>
-      ${bars}
+      <text class="axis" x="${pad.l}" y="${bTop - 3}">DDの数（直近25日）</text>
+      ${bars}${resets}
       <path d="${path}" fill="none" stroke="var(--line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
       ${marks}
       <text class="axis" x="${pad.l}" y="${H - 2}">${md(s[0].d)}</text>
@@ -625,13 +632,14 @@ function ibdCardHtml(results) {
       </div>
       <div class="status-note">${r.note}</div>
       <div class="legend" style="flex-wrap:wrap;row-gap:2px">
-        <span><i style="background:var(--hot)"></i>DD（売り抜けの日）</span>
-        <span><i style="background:var(--good)"></i>▲ フォロースルー</span>
-        <span style="color:var(--hot)">✕ 失敗</span>
-        <span><i style="background:var(--hot-bg);border:1px solid var(--hot)"></i>調整中</span>
-        <span><i style="background:var(--warn-bg);border:1px solid var(--warn)"></i>警戒</span>
+        <span><svg width="9" height="9" aria-hidden="true"><circle cx="4.5" cy="4.5" r="4" fill="var(--hot)"/></svg>DD（大口の売りの日）</span>
+        <span><svg width="10" height="9" aria-hidden="true"><path d="M5,0 L10,9 H0 Z" fill="var(--good)"/></svg>フォロースルー</span>
+        <span><b style="color:var(--hot);margin-right:4px">✕</b>失敗</span>
+        <span><span class="sw" style="background:var(--hot-bg);border:1px solid var(--hot)"></span>調整中</span>
+        <span><span class="sw" style="background:var(--warn-bg);border:1px solid var(--warn)"></span>警戒</span>
+        <span><svg width="11" height="10" aria-hidden="true"><rect x="0" y="6" width="3" height="4" fill="var(--threshold)"/><rect x="4" y="3" width="3" height="7" fill="var(--warn)"/><rect x="8" y="0" width="3" height="10" fill="var(--hot)"/></svg>下の棒＝DDの数（直近25日）</span>
       </div>
-      <div class="chart" id="chart-ibd" style="height:190px"></div>
+      <div class="chart" id="chart-ibd" style="height:200px"></div>
       <div class="rule">基準：DD＝前日比−0.2%超の下落＋出来高が前日より多い（25営業日か、その日の終値から+5%で数から外れる）。フォロースルー＝調整中の反発4日目以降に+1.25%以上＋出来高増で点灯、反発の安値を割ったら失敗。4〜5個で警戒・6個で調整入りはゲージ独自の目安。出来高はSPYで代用するので、IBDの公式の数とずれることがあります</div>
       <div class="meta">${dataDate(spy, 'spy')}・出来高 ${spy.source || ''}</div>
       ${infoPop('ibd')}
