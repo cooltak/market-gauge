@@ -105,15 +105,14 @@ async function cboeSeries(sym, keep = 130) {
 async function fredSeries(id, keep = 130) {
   const from = new Date(Date.now() - 600 * 86400000).toISOString().slice(0, 10)
   let res, lastErr
-  for (let i = 0; i < 2 && !res; i++) {
+  for (let i = 0; i < 1 && !res; i++) {
     try {
       res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=${from}`, {
         headers: { 'User-Agent': UA, Accept: 'text/csv,*/*' },
-        signal: AbortSignal.timeout(25000),
+        signal: AbortSignal.timeout(8000),
       })
     } catch (e) {
       lastErr = e
-      await sleep(2000)
     }
   }
   if (!res) throw new Error(`FRED ${id}: ${lastErr?.cause?.code || lastErr?.message}`)
