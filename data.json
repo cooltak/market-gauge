@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-21T11:12:02.724Z",
+ "generatedAt": "2026-11-21T11:15:07.214Z",
  "errors": {},
  "vix": {
   "series": [
@@ -524,8 +524,8 @@
     "v": 35.89
    }
   ],
-  "updatedAt": null,
-  "source": "CBOE"
+  "updatedAt": "2026-11-20",
+  "source": "CBOE+CNBC"
  },
  "tnx": {
   "series": [
@@ -1050,7 +1050,7 @@
     "v": 4.95
    }
   ],
-  "updatedAt": "2026-11-20T22:05:00.000Z",
+  "updatedAt": "2026-11-20T17:05:00.000-0500",
   "source": "CNBC"
  },
  "fearGreed": {
@@ -2149,7 +2149,7 @@
     "index": 1.27
    }
   ],
-  "updatedAt": "2026-11-21T11:12:58.098Z",
+  "updatedAt": "2026-11-21T11:16:03.893Z",
   "fetchedDays": 2
  },
  "aaii": {
@@ -2309,7 +2309,7 @@
     "bear": 42.2
    }
   ],
-  "updatedAt": "2026-11-21T11:12:58.392Z",
+  "updatedAt": "2026-11-21T11:16:04.189Z",
   "source": "AAII"
  },
  "spx": {
@@ -3095,7 +3095,7 @@
     "ma200": 7348.1
    }
   ],
-  "updatedAt": "2026-11-20T00:00:00.000Z",
+  "updatedAt": "2026-11-20",
   "source": "CNBC",
   "raw": [
    {
