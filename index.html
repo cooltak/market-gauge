@@ -95,6 +95,30 @@ h1 { font-size: 22px; margin: 0; white-space: nowrap; flex-shrink: 0; letter-spa
 .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .card h2 { font-size: 14px; margin: 0; color: var(--text-2); font-weight: 600; }
 .card h2 small { display: block; font-weight: 400; color: var(--text-3); font-size: 11px; }
+/* (i) ボタンと説明の小窓（popover: タップで開き、外をタップで閉じる） */
+.info {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: 1px;
+  width: 18px; height: 18px; margin-left: 6px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--text-3); background: transparent; color: var(--text-3);
+  font: italic 700 11px/1 Georgia, serif; cursor: pointer;
+}
+.info-pop {
+  width: min(calc(100vw - 32px), 420px); max-height: calc(100dvh - 64px); overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px 12px;
+  background: var(--surface); color: var(--text); font-size: 14px; line-height: 1.65;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+.info-pop::backdrop { background: rgba(0, 0, 0, 0.3); }
+.info-pop h3 { font-size: 16px; margin: 0 0 10px; }
+.info-pop .buy { background: var(--good-bg); color: var(--good-ink); border-radius: 8px; padding: 8px 10px; margin: 0 0 8px; font-weight: 600; }
+.info-pop .near { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 10px; margin: 0 0 8px; }
+.info-pop p { margin: 0 0 8px; }
+.info-pop .what { color: var(--text-2); }
+.info-pop .memo { color: var(--text-3); font-size: 13px; }
+.info-close {
+  display: block; width: 100%; margin-top: 6px; padding: 8px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg); color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer;
+}
 .value-row { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 2px; flex-wrap: wrap; }
 .value { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .delta { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
@@ -339,6 +363,73 @@ function ibdJudge(days) {
   return { level: 'calm', label: '上昇トレンド', note: dd }
 }
 
+// ---- (i) の説明: どうなったら買い場か（基準値を変えたら、ここも直す） ----
+const HELP = {
+  putCall: {
+    title: 'プット・コール・レシオ',
+    buy: '● 買い場：1.1 以上（弱気に傾きすぎ → 反転しやすい）',
+    near: '▲ 注目：1.0 以上、または5日平均が 1.0 以上（弱気が増えてきた）',
+    what: '下落に備える保険（プット）と、上昇に賭ける取引（コール）の量の比。普段は 1 を下回る。怖がった人が保険を買い急ぐと 1 を超える。',
+    memo: '記事の基準は 1.15（ゲージは 1.1 に下げている）。VIX とセットで見る。',
+  },
+  vix: {
+    title: 'VIX（恐怖指数）',
+    buy: '● 買い場：30 を超えて高値を付けたあと、ゆっくり下がり始めた（直近30日の高値から1割以上低く、3日前より低い）',
+    near: '▲ 注目：30 以上（恐怖のピーク圏）、40 以上（非常に高い）。まだ買わず、下がり始めを待つ',
+    what: 'S&P500 のオプションから計算する「この先30日の値動きの大きさ」の予想。恐怖が強いほど上がる。',
+    memo: '20台はまだ恐怖が足りない。上がっている最中ではなく、高い所から下がり始めが買い場。',
+  },
+  fearGreed: {
+    title: 'Fear & Greed Index',
+    buy: '● 買い場：25 以下（Extreme Fear＝極度の恐怖）',
+    near: '▲ 注目：45 以下（恐怖）。25 まで落ちるかを見る',
+    what: 'CNN が株価の勢い・値動きの荒さ・オプションなど7つの要素から作る、市場心理の総合点（0〜100）。',
+    memo: '中立（50前後）に戻るのは過熱が冷めた良い兆しだが、底の判断には極度の恐怖まで落ちるのを待つ。',
+  },
+  aaii: {
+    title: 'AAII 個人投資家調査',
+    buy: '● 買い場：強気 20% 以下 かつ 弱気 50% 以上（極度の悲観）',
+    near: '▲ 注目：弱気が強気を上回る（記事の「ブルベア指数」の見方と同じ）',
+    what: '米国個人投資家協会が毎週木曜に出す「この先6ヶ月、強気か弱気か」のアンケート。大きな数字は 強気% − 弱気%。',
+    memo: '個人の悲観の極みは、底入れの先行サインになりやすい（個人は最後の売り手になりがち）。',
+  },
+  tnx: {
+    title: '米10年債利回り',
+    buy: '● 買い場の材料：約1ヶ月で 0.30% 以上の低下（急低下＝投資家が債券に避難中）',
+    near: '▲ 注目：約1ヶ月で 0.15% 以上の低下（低下傾向）',
+    what: '米国の長期金利。怖がった投資家が安全な国債に逃げると、国債が買われて利回りが下がる。',
+    memo: '🔥 VIX のピークアウトと同時に出たら「最強の買いシグナル」（記事でいちばん重視する組み合わせ）。',
+  },
+  spx: {
+    title: 'S&P500 と移動平均線',
+    buy: '● 底入れの確認：50日線を割ったあと、50日線の上に戻った（直近20日のうちに割っていた場合）',
+    near: '▲ 注意：50日線割れ（機関投資家の売りルールが働く線）、200日線割れ（長期トレンドも崩れた）',
+    what: 'S&P500 の終値と、過去50日・200日の終値の平均（移動平均線）。',
+    memo: '恐怖サインの数には入れない。恐怖サインがそろったあとに、ここで値動きの回復を確かめる。',
+  },
+  ibd: {
+    title: 'ディストリビューション／フォロースルー',
+    buy: '● 上昇入りの確認：フォロースルーデーの点灯（調整中、安値の後に初めて上げた日を1日目として、4日目以降に +1.25% 以上・出来高が前日より多い日）',
+    near: '▲ 注意：DD が 4〜5 個で「警戒」、6 個で「調整入り」（ゲージ独自の目安）。反発の安値を割るとフォロースルーは失敗（✕・消灯）',
+    what: 'DD（ディストリビューション・デー）＝前日比 −0.2% を超えて下がり、出来高が前日より多い日。大口の売り抜けの印で、直近25営業日の数を数える（+5% 上がると外れる）。',
+    memo: '「底で買う」合図ではなく「上昇に戻ったのを確かめて乗る」合図。フォロースルーは約半分がダマシ（検証）。出来高は SPY で代用。',
+  },
+}
+const infoBtn = (key) => HELP[key]
+  ? `<button type="button" class="info" popovertarget="info-${key}" aria-label="${HELP[key].title}の説明">i</button>` : ''
+const infoPop = (key) => {
+  const h = HELP[key]
+  if (!h) return ''
+  return `<div popover id="info-${key}" class="info-pop" role="dialog" aria-label="${h.title}の説明">
+      <h3>${h.title}</h3>
+      <p class="buy">${h.buy}</p>
+      <p class="near">${h.near}</p>
+      <p class="what">${h.what}</p>
+      <p class="memo">${h.memo}</p>
+      <button type="button" class="info-close" popovertarget="info-${key}" popovertargetaction="hide">閉じる</button>
+    </div>`
+}
+
 // ---- ミニチャート（SVG） ----
 function sparkline(el, series, ind) {
   const s = series.slice(-65) // 約3ヶ月
@@ -475,7 +566,7 @@ function ibdCardHtml(results) {
   const p = last(days)
   return `<article class="card" data-key="ibd">
       <div class="card-head">
-        <h2>ディストリビューション／フォロースルー<small>IBD流・S&P500（出来高は SPY で代用）</small></h2>
+        <h2>ディストリビューション／フォロースルー${infoBtn('ibd')}<small>IBD流・S&P500（出来高は SPY で代用）</small></h2>
         <span class="pill ${r.level}">${ICON[r.level]} ${r.label}</span>
       </div>
       <div class="value-row">
@@ -493,6 +584,7 @@ function ibdCardHtml(results) {
       <div class="chart" id="chart-ibd" style="height:190px"></div>
       <div class="rule">基準：DD＝前日比−0.2%超の下落＋出来高が前日より多い（25営業日か、その日の終値から+5%で数から外れる）。フォロースルー＝調整中の反発4日目以降に+1.25%以上＋出来高増で点灯、反発の安値を割ったら失敗。4〜5個で警戒・6個で調整入りはゲージ独自の目安。出来高はSPYで代用するので、IBDの公式の数とずれることがあります</div>
       <div class="meta">${dataDate(spy, 'spy')}・出来高 ${spy.source || ''}</div>
+      ${infoPop('ibd')}
     </article>`
 }
 
@@ -532,7 +624,7 @@ function cardHtml(ind, results) {
     : ''
   return `<article class="card" data-key="${ind.key}">
       <div class="card-head">
-        <h2>${ind.name}<small>${ind.sub}${src.source ? ` · ${src.source}` : ''}</small></h2>
+        <h2>${ind.name}${infoBtn(ind.key)}<small>${ind.sub}${src.source ? ` · ${src.source}` : ''}</small></h2>
         <span class="pill ${r.level}">${ICON[r.level]} ${r.label}</span>
       </div>
       <div class="value-row">
@@ -544,6 +636,7 @@ function cardHtml(ind, results) {
       <div class="chart" id="chart-${ind.key}"></div>
       <div class="rule">基準：${ind.rule}</div>
       <div class="meta">${dataDate(src, ind.key)}</div>
+      ${infoPop(ind.key)}
     </article>`
 }
 
