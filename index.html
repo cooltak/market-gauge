@@ -96,12 +96,15 @@ h1 { font-size: 22px; margin: 0; white-space: nowrap; flex-shrink: 0; letter-spa
 .card h2 { font-size: 14px; margin: 0; color: var(--text-2); font-weight: 600; }
 .card h2 small { display: block; font-weight: 400; color: var(--text-3); font-size: 11px; }
 /* (i) ボタンと説明の小窓（popover: タップで開き、外をタップで閉じる） */
+/* 見た目は13pxの細線アイコン。タップ範囲は透明の余白で約27pxにして、負のマージンで見た目の位置を保つ */
 .info {
-  display: inline-flex; align-items: center; justify-content: center; vertical-align: 1px;
-  width: 18px; height: 18px; margin-left: 6px; padding: 0; border-radius: 50%;
-  border: 1px solid var(--text-3); background: transparent; color: var(--text-3);
-  font: italic 700 11px/1 Georgia, serif; cursor: pointer;
+  display: inline-flex; vertical-align: -2px;
+  padding: 7px; margin: -7px -7px -7px -3px;
+  border: 0; background: none; color: var(--text-3); opacity: 0.8;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
+.info svg { width: 13px; height: 13px; display: block; }
+.info:hover, .info:focus-visible { opacity: 1; color: var(--text-2); }
 .info-pop {
   width: min(calc(100vw - 32px), 420px); max-height: calc(100dvh - 64px); overflow-y: auto;
   border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px 12px;
@@ -415,8 +418,9 @@ const HELP = {
     memo: '「底で買う」合図ではなく「上昇に戻ったのを確かめて乗る」合図。フォロースルーは約半分がダマシ（検証）。出来高は SPY で代用。',
   },
 }
+const INFO_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7.1" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="4.8" r="0.9" fill="currentColor"/><path d="M8 7.1v4.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
 const infoBtn = (key) => HELP[key]
-  ? `<button type="button" class="info" popovertarget="info-${key}" aria-label="${HELP[key].title}の説明">i</button>` : ''
+  ? `<button type="button" class="info" popovertarget="info-${key}" aria-label="${HELP[key].title}の説明">${INFO_ICON}</button>` : ''
 const infoPop = (key) => {
   const h = HELP[key]
   if (!h) return ''
