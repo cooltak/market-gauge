@@ -174,7 +174,7 @@ h1 { font-size: 22px; margin: 0; white-space: nowrap; flex-shrink: 0; letter-spa
       <li><b>プットコールレシオ</b>：1.1以上で「弱気に傾きすぎ」＝反転しやすい（CBOE Total）。</li>
       <li><b>VIX</b>：20台はまだ恐怖不足。30超え（できれば40超え）まで上がり、そこから下がり始めたら買い場サイン。</li>
       <li><b>Fear &amp; Greed</b>：25以下（Extreme Fear）で点灯。</li>
-      <li><b>米10年債利回り</b>（FREDの場合は1営業日遅れ）：約1ヶ月（20営業日）で0.30%以上低下したら「急低下」で点灯。</li>
+      <li><b>米10年債利回り</b>：1ヶ月以内の高値から0.30%以上低下したら「急低下」で点灯（0.30%は記事の数字ではなく、ゲージ独自の目安）。</li>
       <li><b>AAII 個人投資家調査</b>：強気20%以下・弱気50%以上で点灯（毎週木曜発表）。弱気が強気を上回るだけでも「いいサイン」。</li>
       <li><b>S&amp;P500 移動平均線</b>（テクニカル確認）：50日線を割ったら機関投資家の「売りルール」。底入れ後に50日線を回復したら確認材料。恐怖サインの数には含めない。</li>
       <li>記事の目安：恐怖サインが多く点いたら、次にテクニカルを確認してから分割エントリー。</li>
@@ -259,16 +259,26 @@ const INDICATORS = [
   },
   {
     key: 'tnx', name: '米10年債利回り', sub: '米国債10年（%）', digits: 2,
-    rule: '約1ヶ月で0.30%以上の低下 →「急低下」（リスクオフ）',
+    rule: '1ヶ月以内の高値から0.30%以上の低下 →「急低下」（投資家が債券に避難＝リスクオフ）',
+    // 見たいのは「怖がった投資家が国債に急いで逃げたか」なので、1点前との比較ではなく、
+    // 1ヶ月（今日を含む22営業日）以内の高値からの下げ幅で見る（行って来いで下げが消えないように）
+    dropFromPeak: 0.3,
+    peakWindow: 22,
     judge(s) {
       const v = last(s).v
-      const base = s.length > 20 ? last(s, 21).v : s[0].v
-      const ch = v - base
-      const note = `1ヶ月で ${signed(ch)}%`
-      if (ch <= -0.3) return { level: 'on', label: '急低下', note: `${note}。投資家が債券に避難中` }
-      if (ch <= -0.15) return { level: 'watch', label: '低下傾向', note }
-      return { level: 'calm', label: ch >= 0.15 ? '上昇' : '横ばい', note }
+      const peak = s.slice(-this.peakWindow).reduce((a, p) => (p.v > a.v ? p : a))
+      const ch = v - peak.v
+      const base = s.length > 21 ? last(s, 22).v : s[0].v
+      const note = `1ヶ月以内の高値 ${fmt(peak.v)}%（${md(peak.d)}）から ${signed(ch)}%`
+      if (ch <= -this.dropFromPeak) return { level: 'on', label: '急低下', note: `${note}。投資家が債券に避難中` }
+      if (ch <= -this.dropFromPeak / 2) return { level: 'watch', label: '低下傾向', note }
+      return { level: 'calm', label: v - base >= 0.15 ? '上昇' : '横ばい', note }
     },
+    // グラフの動く基準線: その日までの1ヶ月以内の高値 − 0.30%。青い線がこの下（緑）に入ったら急低下
+    dynThreshold(s) {
+      return s.map((p, i) => Math.max(...s.slice(Math.max(0, i + 1 - this.peakWindow), i + 1).map((q) => q.v)) - this.dropFromPeak)
+    },
+    dynLabel: '急低下ライン',
   },
 ]
 
@@ -398,10 +408,10 @@ const HELP = {
   },
   tnx: {
     title: '米10年債利回り',
-    buy: '● 買い場の材料：約1ヶ月で 0.30% 以上の低下（急低下＝投資家が債券に避難中）',
-    near: '▲ 注目：約1ヶ月で 0.15% 以上の低下（低下傾向）',
+    buy: '● 買い場の材料：1ヶ月以内の高値から 0.30% 以上の低下（急低下＝投資家が債券に避難中）。グラフでは青い線が点線（急低下ライン）より下の緑に入った状態',
+    near: '▲ 注目：1ヶ月以内の高値から 0.15% 以上の低下（低下傾向）',
     what: '米国の長期金利。怖がった投資家が安全な国債に逃げると、国債が買われて利回りが下がる。',
-    memo: '🔥 VIX のピークアウトと同時に出たら「最強の買いシグナル」（記事でいちばん重視する組み合わせ）。',
+    memo: '🔥 VIX のピークアウトと同時に出たら「最強の買いシグナル」（記事でいちばん重視する組み合わせ）。記事は「金利が大きく低下しているか」とだけ書いていて、0.30% はゲージ独自の目安。',
   },
   spx: {
     title: 'S&P500 と移動平均線',
@@ -440,7 +450,9 @@ function sparkline(el, series, ind) {
   const W = el.clientWidth || 300, H = el.clientHeight || 120
   const pad = { l: 4, r: 34, t: 10, b: 16 }
   const extra = ind.extra || []
-  const vals = s.flatMap((p) => [p.v, ...extra.map((e) => p[e.key])]).filter((v) => v != null)
+  // 日ごとに動く基準線（10年債の「1ヶ月以内の高値 − 0.30%」など）。全期間で計算してから3ヶ月分を切り出す
+  const dyn = ind.dynThreshold ? ind.dynThreshold(series).slice(-s.length) : null
+  const vals = s.flatMap((p, i) => [p.v, ...extra.map((e) => p[e.key]), dyn?.[i]]).filter((v) => v != null)
   let lo = ind.min ?? Math.min(...vals), hi = ind.max ?? Math.max(...vals)
   if (ind.threshold != null && ind.min == null) { lo = Math.min(lo, ind.threshold); hi = Math.max(hi, ind.threshold) }
   const span = hi - lo || 1
@@ -458,6 +470,12 @@ function sparkline(el, series, ind) {
     zone = `<rect x="${pad.l}" y="${zy}" width="${W - pad.l - pad.r}" height="${Math.max(0, zh)}" fill="var(--zone)"/>`
     thr = `<line x1="${pad.l}" x2="${W - pad.r}" y1="${ty}" y2="${ty}" stroke="var(--threshold)" stroke-width="1" stroke-dasharray="3 3"/>
       <text class="axis" x="${W - pad.r + 4}" y="${ty + 3}">${ind.threshold}</text>`
+  }
+  if (dyn) {
+    const pts = dyn.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`)
+    zone = `<path d="M${pts.join(' L')} L${x(s.length - 1).toFixed(1)},${H - pad.b} L${x(0).toFixed(1)},${H - pad.b} Z" fill="var(--zone)"/>`
+    thr = `<path d="M${pts.join(' L')}" fill="none" stroke="var(--threshold)" stroke-width="1" stroke-dasharray="3 3"/>
+      <text class="axis" x="${W - pad.r + 4}" y="${y(last(dyn)) + 3}">${fmt(last(dyn))}</text>`
   }
   const lp = s.length - 1
   el.innerHTML = `
@@ -485,7 +503,8 @@ function sparkline(el, series, ind) {
     tip.style.display = 'block'
     tip.style.left = `${(cx / W) * 100}%`
     tip.textContent = `${md(s[i].d)}  ${fmt(s[i].v, ind.digits)}` +
-      extra.map((e) => `  ${e.label} ${fmt(s[i][e.key], ind.digits)}`).join('')
+      extra.map((e) => `  ${e.label} ${fmt(s[i][e.key], ind.digits)}`).join('') +
+      (dyn ? `  ${ind.dynLabel} ${fmt(dyn[i], ind.digits)}` : '')
   }
   const hide = () => { g.style.display = 'none'; tip.style.display = 'none' }
   el.onpointermove = (e) => show(e.clientX)
