@@ -102,18 +102,29 @@ async function cboeSeries(sym, keep = 130) {
 }
 
 // ---------- FRED（米10年債の公式日次データ、1営業日遅れ）----------
-async function fredSeries(id) {
-  const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}`, {
-    headers: { 'User-Agent': UA },
-  })
-  if (!res.ok) throw new Error(`FRED HTTP ${res.status}`)
+async function fredSeries(id, keep = 130) {
+  const from = new Date(Date.now() - 600 * 86400000).toISOString().slice(0, 10)
+  let res, lastErr
+  for (let i = 0; i < 2 && !res; i++) {
+    try {
+      res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=${from}`, {
+        headers: { 'User-Agent': UA, Accept: 'text/csv,*/*' },
+        signal: AbortSignal.timeout(25000),
+      })
+    } catch (e) {
+      lastErr = e
+      await sleep(2000)
+    }
+  }
+  if (!res) throw new Error(`FRED ${id}: ${lastErr?.cause?.code || lastErr?.message}`)
+  if (!res.ok) throw new Error(`FRED ${id} HTTP ${res.status}`)
   const lines = (await res.text()).trim().split('\n').slice(1)
   const series = lines
     .map((l) => l.split(','))
     .filter(([, v]) => v && v !== '.' && Number.isFinite(parseFloat(v)))
     .map(([d, v]) => ({ d, v: parseFloat(v) }))
-    .slice(-130)
-  if (!series.length) throw new Error('FRED: データ空')
+    .slice(-keep)
+  if (!series.length) throw new Error(`FRED ${id}: データ空`)
   return { series, updatedAt: null, source: 'FRED' }
 }
 
@@ -130,24 +141,96 @@ async function firstOk(label, fns) {
   throw new Error(errs.join(' / '))
 }
 
-async function fetchVix() {
-  return firstOk('vix', [
-    () => cboeSeries('VIX'),
-    async () => ({ ...(await yahooSeries('^VIX')), source: 'Yahoo' }),
-  ])
+// ---------- CBOE 日次CSV（VIX_History.csv など）----------
+async function cboeCsv(sym, keep = 130) {
+  const res = await fetch(`https://cdn.cboe.com/api/global/us_indices/daily_prices/${sym}_History.csv`, {
+    headers: { 'User-Agent': UA, Accept: 'text/csv,*/*' },
+  })
+  if (!res.ok) throw new Error(`CBOE CSV ${sym} HTTP ${res.status}`)
+  const lines = (await res.text()).trim().split('\n')
+  const head = lines.shift().toUpperCase().split(',')
+  const ci = head.findIndex((h) => h.includes('CLOSE'))
+  const series = lines
+    .map((l) => l.split(','))
+    .map((c) => {
+      const [m, d, y] = c[0].split('/') // MM/DD/YYYY
+      return { d: `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`, v: round(parseFloat(c[ci])) }
+    })
+    .filter((p) => Number.isFinite(p.v) && /^\d{4}-/.test(p.d))
+    .sort((a, b) => a.d.localeCompare(b.d))
+    .slice(-keep)
+  if (!series.length) throw new Error(`CBOE CSV ${sym}: データ空`)
+  return { series, updatedAt: null, source: 'CBOE' }
 }
 
-async function fetchTnx() {
-  const out = await firstOk('tnx', [
-    () => cboeSeries('TNX'),
-    () => fredSeries('DGS10'),
-    async () => ({ ...(await yahooSeries('^TNX')), source: 'Yahoo' }),
-  ])
-  // 昔の ^TNX は利回り×10（例: 42.5）で配信されていたので念のため補正
-  const vals = out.series.map((p) => p.v).sort((a, b) => a - b)
-  const median = vals[Math.floor(vals.length / 2)] ?? 0
-  if (median > 20) out.series = out.series.map((p) => ({ d: p.d, v: round(p.v / 10, 3) }))
-  out.series = out.series.map((p) => ({ d: p.d, v: round(p.v, 3) }))
+// ---------- CNBC（最新値のみ。履歴は前回の data.json に継ぎ足す）----------
+async function cnbcQuote(sym) {
+  const url =
+    'https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol' +
+    `?symbols=${encodeURIComponent(sym)}&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json`
+  const json = await getJSON(url)
+  const q = json?.FormattedQuoteResult?.FormattedQuote?.[0]
+  const v = parseFloat(String(q?.last ?? '').replace(/[^\d.\-]/g, ''))
+  const t = q?.last_time
+  if (!Number.isFinite(v) || !t) throw new Error(`CNBC ${sym}: 値なし`)
+  return { d: nyDate(new Date(t)), v: round(v, 3), t: new Date(t).toISOString() }
+}
+
+function appendPoint(series, q, keep = 130) {
+  const map = new Map((series || []).map((p) => [p.d, p.v]))
+  map.set(q.d, q.v)
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-keep)
+    .map(([d, v]) => ({ d, v }))
+}
+
+// 履歴ソース → 取れたら CNBC の最新値で当日分を上書き。全滅なら前回データに CNBC を継ぎ足す
+async function historyPlusLatest(label, historySources, cnbcSym, prevSeries, keep = 130) {
+  let out = null
+  try {
+    out = await firstOk(label, historySources)
+  } catch (e) {
+    console.warn(`${label}: 履歴ソース全滅 → CNBCで継ぎ足し`)
+  }
+  let q = null
+  try {
+    q = await cnbcQuote(cnbcSym)
+  } catch (e) {
+    console.warn(`${label}: ${e.message}`)
+  }
+  if (out) {
+    if (q && q.d >= out.series.at(-1).d) {
+      out.series = appendPoint(out.series, q, keep)
+      out.updatedAt = q.t
+      out.source += '+CNBC'
+    }
+    return out
+  }
+  if (q && prevSeries?.length) return { series: appendPoint(prevSeries, q, keep), updatedAt: q.t, source: 'CNBC' }
+  throw new Error(`${label}: 全ソース失敗`)
+}
+
+const yahoo = (sym, range) => async () => ({ ...(await yahooSeries(sym, range)), source: 'Yahoo' })
+
+async function fetchVix(prev) {
+  return historyPlusLatest(
+    'vix',
+    [() => cboeSeries('VIX'), () => cboeCsv('VIX'), () => fredSeries('VIXCLS'), yahoo('^VIX')],
+    '.VIX',
+    prev?.series,
+  )
+}
+
+async function fetchTnx(prev) {
+  const out = await historyPlusLatest(
+    'tnx',
+    [() => cboeSeries('TNX'), () => fredSeries('DGS10'), yahoo('^TNX')],
+    'US10Y',
+    prev?.series,
+  )
+  // CBOE の TNX は利回り×10（例: 42.5）で配信されるので補正
+  out.series = out.series.map((p) => ({ d: p.d, v: round(p.v > 20 ? p.v / 10 : p.v, 3) }))
   return out
 }
 
@@ -229,20 +312,31 @@ async function fetchPutCall(prev) {
 }
 
 // ---------- S&P500 と移動平均線 ----------
-async function fetchSpx() {
-  const out = await firstOk('spx', [
-    () => cboeSeries('SPX', 330),
-    async () => ({ ...(await yahooSeries('^GSPC', '2y')), source: 'Yahoo' }),
-  ])
+async function fetchSpx(prev) {
+  // 200日線の計算用に生の終値を330日分 raw として保存しておく
+  const prevRaw = prev?.raw || prev?.series?.map((p) => ({ d: p.d, v: p.v }))
+  const out = await historyPlusLatest(
+    'spx',
+    [() => cboeSeries('SPX', 330), () => fredSeries('SP500', 330), yahoo('^GSPC', '2y')],
+    '.SPX',
+    prevRaw,
+    330,
+  )
   const s = out.series
-  if (s.length < 200) throw new Error(`S&P500: 200日分に足りない（${s.length}件）`)
   const ma = (i, n) => {
     if (i + 1 < n) return null
     let sum = 0
     for (let j = i + 1 - n; j <= i; j++) sum += s[j].v
     return round(sum / n)
   }
+  out.raw = s
   out.series = s.map((p, i) => ({ ...p, ma50: ma(i, 50), ma200: ma(i, 200) })).slice(-130)
+  // 履歴が足りず200日線が計算できない日は、前回の値を引き継ぐ
+  const prevMa = new Map((prev?.series || []).map((p) => [p.d, p]))
+  out.series = out.series.map((p) => {
+    const o = prevMa.get(p.d)
+    return { ...p, ma50: p.ma50 ?? o?.ma50 ?? null, ma200: p.ma200 ?? o?.ma200 ?? null }
+  })
   return out
 }
 
@@ -322,12 +416,12 @@ async function main() {
 
   const out = { generatedAt: new Date().toISOString(), errors: {} }
   const jobs = {
-    vix: () => fetchVix(),
-    tnx: () => fetchTnx(),
+    vix: () => fetchVix(prev.vix),
+    tnx: () => fetchTnx(prev.tnx),
     fearGreed: () => fetchFearGreed(),
     putCall: () => fetchPutCall(prev.putCall),
     aaii: () => fetchAaii(prev.aaii),
-    spx: () => fetchSpx(),
+    spx: () => fetchSpx(prev.spx),
   }
   let ok = 0
   // ONLY=putCall,vix のように指定すると一部だけ取得（テスト用）
