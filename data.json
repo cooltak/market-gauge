@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-21T15:34:10.471Z",
+ "generatedAt": "2026-11-21T15:35:13.773Z",
  "errors": {},
  "vix": {
   "series": [
@@ -2152,7 +2152,7 @@
     "index": 1.27
    }
   ],
-  "updatedAt": "2026-11-21T15:29:21.504Z",
+  "updatedAt": "2026-11-21T15:35:24.666Z",
   "fetchedDays": 2,
   "changedAt": null
  },
@@ -2313,7 +2313,7 @@
     "bear": 42.2
    }
   ],
-  "updatedAt": "2026-11-21T15:29:21.918Z",
+  "updatedAt": "2026-11-21T15:35:24.948Z",
   "source": "AAII",
   "changedAt": null
  },
@@ -3101,7 +3101,7 @@
    }
   ],
   "updatedAt": "2026-11-20",
-  "source": "FRED+CNBC",
+  "source": "CNBC",
   "raw": [
    {
     "d": "2025-08-01",
