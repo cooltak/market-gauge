@@ -144,7 +144,7 @@ h1 { font-size: 22px; margin: 0; white-space: nowrap; flex-shrink: 0; letter-spa
   <details class="howto">
     <summary>判定ルールと使い方</summary>
     <ul>
-      <li><b>プットコールレシオ</b>：1.15以上で「弱気に傾きすぎ」＝反転しやすい（CBOE Total）。</li>
+      <li><b>プットコールレシオ</b>：1.1以上で「弱気に傾きすぎ」＝反転しやすい（CBOE Total）。</li>
       <li><b>VIX</b>：20台はまだ恐怖不足。30超え（できれば40超え）まで上がり、そこから下がり始めたら買い場サイン。</li>
       <li><b>Fear &amp; Greed</b>：25以下（Extreme Fear）で点灯。</li>
       <li><b>米10年債利回り</b>（FREDの場合は1営業日遅れ）：約1ヶ月（20営業日）で0.30%以上低下したら「急低下」で点灯。</li>
@@ -176,14 +176,14 @@ const FG_LABEL = {
 const INDICATORS = [
   {
     key: 'putCall', name: 'プット・コール・レシオ', sub: 'CBOE Total Put/Call', digits: 2,
-    threshold: 1.15, zone: 'above',
-    rule: '1.15以上で「弱気に傾きすぎ」→ 反転しやすい',
+    threshold: 1.1, zone: 'above',
+    rule: '1.1以上で「弱気に傾きすぎ」→ 反転しやすい',
     judge(s) {
       const v = last(s).v
       const avg5 = s.slice(-5).reduce((a, p) => a + p.v, 0) / Math.min(5, s.length)
       const eq = last(s).equity
       const extra = `5日平均 ${fmt(avg5)}${eq != null ? ` ／ 個別株 ${fmt(eq)}` : ''}`
-      if (v >= 1.15) return { level: 'on', label: '買い場サイン', note: `弱気に傾きすぎ。${extra}` }
+      if (v >= 1.1) return { level: 'on', label: '買い場サイン', note: `弱気に傾きすぎ。${extra}` }
       if (v >= 1.0 || avg5 >= 1.0) return { level: 'watch', label: '弱気寄り', note: `1を超えて弱気が増加中。${extra}` }
       return { level: 'calm', label: '平常', note: `まだ楽観寄り。${extra}` }
     },

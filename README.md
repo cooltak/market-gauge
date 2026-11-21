@@ -13,7 +13,7 @@ GitHub Actions（30分ごと） → scripts/fetch.mjs → data.json をコミッ
 
 | 指標 | 取得元 | 買い場サイン |
 |---|---|---|
-| プット・コール・レシオ | CBOE（Total） | 1.15以上 |
+| プット・コール・レシオ | CBOE（Total） | 1.1以上 |
 | VIX | Yahoo Finance `^VIX` | 30超えの高値から下がり始め |
 | Fear & Greed | CNN | 25以下 |
 | 米10年債利回り | Yahoo Finance `^TNX` | 約1ヶ月で0.30%以上低下 |
