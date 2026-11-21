@@ -16,7 +16,7 @@ GitHub Actions（30分ごと） → scripts/fetch.mjs → data.json をコミッ
 | プット・コール・レシオ | CBOE（Total） | 1.1以上 |
 | VIX | Yahoo Finance `^VIX` | 30超えの高値から下がり始め |
 | Fear & Greed | CNN | 25以下 |
-| 米10年債利回り | CBOE・CNBC など | 1ヶ月以内の高値から0.30%以上低下 |
+| 米10年債利回り | CBOE・CNBC など | 1ヶ月以内の高値から0.20pt以上低下 かつ S&P500が1ヶ月以内の高値から5%以上下落 |
 
 「VIX高値から低下」＋「10年債利回り急低下」が同時に出たら 🔥最強シグナル。
 
