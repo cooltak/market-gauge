@@ -434,6 +434,21 @@ async function fetchAaii(prev) {
 }
 
 // ---------- main ----------
+// 画面の「最終更新」用: 最新の1点（日付・値・内訳）が前回と変わった時だけ今の時刻にする。
+// updatedAt は取得元によって「気配の時刻」「日付だけ」「取りに行った時刻」と意味がばらばらなので使わない
+// 比べるのは日付と値だけ（S&P500 の移動平均線は取得元が変わると小数点以下が揺れるため）
+function changedAt(cur, prev, now, prevGeneratedAt) {
+  const sig = (x) => { const p = x?.series?.at(-1); return p ? `${p.d}|${p.v}` : '' }
+  if (!prev || sig(cur) !== sig(prev)) return now
+  if (prev.changedAt !== undefined) return prev.changedAt
+  // 記録を始める前のデータ: 時刻つきの updatedAt を代用する。ただし前回の実行時刻と1時間以内のものは
+  // 「取りに行った時刻」（プット・コール・レシオ、AAII）なので使わず、不明（null）にする
+  const t = /T\d{2}:\d{2}/.test(prev.updatedAt ?? '') ? new Date(prev.updatedAt) : null
+  if (!t || Number.isNaN(+t)) return null
+  if (prevGeneratedAt && Math.abs(t - new Date(prevGeneratedAt)) < 3600e3) return null
+  return t.toISOString()
+}
+
 async function main() {
   let prev = {}
   try {
@@ -459,6 +474,7 @@ async function main() {
     }
     try {
       out[key] = await fn()
+      out[key].changedAt = changedAt(out[key], prev[key], out.generatedAt, prev.generatedAt)
       ok++
       console.log(`✓ ${key}: ${out[key].series.length}件 最新=${JSON.stringify(out[key].series.at(-1))}`)
     } catch (e) {

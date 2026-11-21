@@ -331,10 +331,21 @@ function sparkline(el, series, ind) {
 let DATA = null
 const ICON = { on: '●', watch: '▲', calm: '–' }
 
+const jstFmt = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+})
+function agoText(t) {
+  const ago = Math.max(0, Math.round((Date.now() - t) / 60000))
+  return ago < 60 ? `${ago}分前` : ago < 1440 ? `${Math.round(ago / 60)}時間前` : `${Math.round(ago / 1440)}日前`
+}
+
 function dataDate(d, key) {
   const p = last(d.series)
   const stale = d.stale ? ' <span class="stale">⚠ 取得失敗・前回値</span>' : ''
-  return `データ日 ${md(p.d)}（米国）${stale}`
+  // changedAt = 値が最後に変わったのを取得スクリプトが確かめた時刻（scripts/fetch.mjs）
+  const t = d.changedAt ? new Date(d.changedAt) : null
+  const upd = t && !Number.isNaN(+t) ? `最終更新 ${jstFmt.format(t)}（${agoText(t)}）・` : ''
+  return `${upd}データ日 ${md(p.d)}（米国）${stale}`
 }
 
 function cardHtml(ind, results) {
@@ -405,12 +416,7 @@ function render() {
     ${results.spx ? `<div class="sub">テクニカル：${ICON[results.spx.level]} S&P500 ${results.spx.label}</div>` : ''}`
 
   const t = new Date(d.generatedAt)
-  const jst = new Intl.DateTimeFormat('ja-JP', {
-    timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  }).format(t)
-  const ago = Math.round((Date.now() - t) / 60000)
-  const agoTxt = ago < 60 ? `${ago}分前` : ago < 1440 ? `${Math.round(ago / 60)}時間前` : `${Math.round(ago / 1440)}日前`
-  document.getElementById('updated').textContent = `${jst}（${agoTxt}）`
+  document.getElementById('updated').textContent = `${jstFmt.format(t)}（${agoText(t)}）`
   renderMarket()
 }
 
