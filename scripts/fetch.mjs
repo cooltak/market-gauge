@@ -163,6 +163,27 @@ async function cboeCsv(sym, keep = 130) {
   return { series, updatedAt: null, source: 'CBOE' }
 }
 
+// ---------- Stooq（日次CSV）----------
+async function stooqSeries(sym, keep = 130) {
+  const res = await fetch(`https://stooq.com/q/d/l/?s=${encodeURIComponent(sym)}&i=d`, {
+    headers: { 'User-Agent': UA, Accept: 'text/csv,*/*' },
+    signal: AbortSignal.timeout(20000),
+  })
+  if (!res.ok) throw new Error(`Stooq ${sym} HTTP ${res.status}`)
+  const text = (await res.text()).trim()
+  if (!/^Date,/i.test(text)) throw new Error(`Stooq ${sym}: CSVではない応答（${text.slice(0, 80)}）`)
+  const lines = text.split('\n')
+  const head = lines.shift().split(',')
+  const ci = head.findIndex((h) => /close/i.test(h))
+  const series = lines
+    .map((l) => l.split(','))
+    .map((c) => ({ d: c[0], v: round(parseFloat(c[ci]), 3) }))
+    .filter((p) => Number.isFinite(p.v) && /^\d{4}-\d{2}-\d{2}$/.test(p.d))
+    .slice(-keep)
+  if (series.length < 20) throw new Error(`Stooq ${sym}: データ不足`)
+  return { series, updatedAt: null, source: 'Stooq' }
+}
+
 // ---------- CNBC（最新値のみ。履歴は前回の data.json に継ぎ足す）----------
 async function cnbcQuote(sym) {
   const url =
@@ -173,7 +194,9 @@ async function cnbcQuote(sym) {
   const v = parseFloat(String(q?.last ?? '').replace(/[^\d.\-]/g, ''))
   const t = q?.last_time
   if (!Number.isFinite(v) || !t) throw new Error(`CNBC ${sym}: 値なし`)
-  return { d: nyDate(new Date(t)), v: round(v, 3), t: new Date(t).toISOString() }
+  // last_time は取引所の現地時刻（例 2026-11-20T16:59:00.000-0500）や日付のみで来るので、先頭の日付をそのまま使う
+  const d = /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : nyDate(new Date(t))
+  return { d, v: round(v, 3), t: String(t) }
 }
 
 function appendPoint(series, q, keep = 130) {
@@ -225,7 +248,7 @@ async function fetchVix(prev) {
 async function fetchTnx(prev) {
   const out = await historyPlusLatest(
     'tnx',
-    [() => cboeSeries('TNX'), () => fredSeries('DGS10'), yahoo('^TNX')],
+    [() => cboeSeries('TNX'), () => stooqSeries('10usy.b'), () => fredSeries('DGS10'), yahoo('^TNX')],
     'US10Y',
     prev?.series,
   )
@@ -317,7 +340,7 @@ async function fetchSpx(prev) {
   const prevRaw = prev?.raw || prev?.series?.map((p) => ({ d: p.d, v: p.v }))
   const out = await historyPlusLatest(
     'spx',
-    [() => cboeSeries('SPX', 330), () => fredSeries('SP500', 330), yahoo('^GSPC', '2y')],
+    [() => cboeSeries('SPX', 330), () => stooqSeries('^spx', 330), () => fredSeries('SP500', 330), yahoo('^GSPC', '2y')],
     '.SPX',
     prevRaw,
     330,
@@ -333,9 +356,13 @@ async function fetchSpx(prev) {
   out.series = s.map((p, i) => ({ ...p, ma50: ma(i, 50), ma200: ma(i, 200) })).slice(-130)
   // 履歴が足りず200日線が計算できない日は、前回の値を引き継ぐ
   const prevMa = new Map((prev?.series || []).map((p) => [p.d, p]))
+  // それも無い新しい日は直前の200日線で代用（1日の変化はごくわずか）
+  let lastMa200 = null
   out.series = out.series.map((p) => {
     const o = prevMa.get(p.d)
-    return { ...p, ma50: p.ma50 ?? o?.ma50 ?? null, ma200: p.ma200 ?? o?.ma200 ?? null }
+    const ma200 = p.ma200 ?? o?.ma200 ?? lastMa200
+    lastMa200 = ma200
+    return { ...p, ma50: p.ma50 ?? o?.ma50 ?? null, ma200 }
   })
   return out
 }
