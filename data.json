@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-21T02:07:38.464Z",
+ "generatedAt": "2026-11-21T03:57:02.483Z",
  "errors": {
   "vix": "HTTP 403 https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/_VIX.json / HTTP 429 https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX?range=6mo&interval=1d",
   "tnx": "HTTP 403 https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/_TNX.json / fetch failed / HTTP 429 https://query2.finance.yahoo.com/v8/finance/chart/%5ETNX?range=6mo&interval=1d",
@@ -2149,7 +2149,7 @@
     "index": 1.2
    }
   ],
-  "updatedAt": "2026-11-21T02:08:53.476Z",
+  "updatedAt": "2026-11-21T03:58:18.071Z",
   "fetchedDays": 1
  },
  "aaii": {
@@ -2309,7 +2309,7 @@
     "bear": 42.2
    }
   ],
-  "updatedAt": "2026-11-21T02:08:53.941Z",
+  "updatedAt": "2026-11-21T03:58:18.385Z",
   "source": "AAII"
  },
  "spx": {
