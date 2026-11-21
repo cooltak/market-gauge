@@ -357,7 +357,7 @@ function ibdTimeline(spy, idxRaw) {
     const p = spy[i], q = spy[i - 1]
     const c = idx.get(p.d), pc = idx.get(q.d)
     const pct = c != null && pc != null ? c / pc - 1 : p.v / q.v - 1
-    const volUp = p.vol > q.vol
+    const volUp = p.vol != null && q.vol != null && p.vol > q.vol // 出来高が不明な日は「増えた」とみなさない
     const ev = []
     dds = dds.filter((x) => i - x.i < IBD.ddLife && p.v < x.close * (1 + IBD.ddRecover))
     if (pct < IBD.ddDrop && volUp) { dds.push({ i, close: p.v }); ev.push('dd') }

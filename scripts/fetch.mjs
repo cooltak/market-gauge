@@ -380,7 +380,9 @@ async function fetchSpx(prev) {
 // ディストリビューション・デー／フォロースルーデー（画面側で判定）用。S&P500 指数そのものの出来高は
 // 無料で取れないので、SPY（S&P500 の ETF）の出来高で代用する。IBD の公式の数とはずれうる
 const numStr = (s) => parseFloat(String(s ?? '').replace(/[$,]/g, ''))
-const okBar = (p) => [p.v, p.h, p.l, p.vol].every(Number.isFinite) && p.vol > 0
+// 出来高が欠けた・仮の数字（nasdaq.com は 9,999,999 を入れることがある: 2026-04-17）の日は vol を null にして、比べない
+const fixVol = (p) => ({ ...p, vol: Number.isFinite(p.vol) && p.vol > 0 && p.vol !== 9999999 ? p.vol : null })
+const okBar = (p) => [p.v, p.h, p.l].every(Number.isFinite)
 
 async function nasdaqSpy() {
   const to = nyDate(new Date())
@@ -396,6 +398,7 @@ async function nasdaqSpy() {
       return { d: `${y}-${m}-${d}`, v: numStr(r.close), h: numStr(r.high), l: numStr(r.low), vol: numStr(r.volume) }
     })
     .filter(okBar)
+    .map(fixVol)
 }
 
 async function yahooSpy() {
@@ -406,6 +409,7 @@ async function yahooSpy() {
   return r.timestamp
     .map((t, i) => ({ d: nyDate(new Date(t * 1000)), v: round(q.close[i]), h: round(q.high[i]), l: round(q.low[i]), vol: q.volume[i] }))
     .filter(okBar)
+    .map(fixVol)
 }
 
 async function fetchSpy() {
