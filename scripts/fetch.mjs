@@ -6,6 +6,7 @@
 //   VIX / 米10年債利回り … Yahoo Finance (^VIX / ^TNX)
 //   Fear & Greed Index   … CNN
 //   プット・コール・レシオ … CBOE 日次マーケット統計
+//   SPY の高値・安値・終値・出来高 … nasdaq.com（予備 Yahoo）。ディストリビューション・デー／フォロースルーデー用
 //
 // 1つの取得元が失敗しても、前回の data.json の値を残して他は更新する。
 
@@ -366,6 +367,52 @@ async function fetchSpx(prev) {
   return out
 }
 
+// ---------- SPY の日次 高値・安値・終値・出来高 ----------
+// ディストリビューション・デー／フォロースルーデー（画面側で判定）用。S&P500 指数そのものの出来高は
+// 無料で取れないので、SPY（S&P500 の ETF）の出来高で代用する。IBD の公式の数とはずれうる
+const numStr = (s) => parseFloat(String(s ?? '').replace(/[$,]/g, ''))
+const okBar = (p) => [p.v, p.h, p.l, p.vol].every(Number.isFinite) && p.vol > 0
+
+async function nasdaqSpy() {
+  const to = nyDate(new Date())
+  const from = nyDate(new Date(Date.now() - 400 * 86400e3))
+  const json = await getJSON(
+    `https://api.nasdaq.com/api/quote/SPY/historical?assetclass=etf&fromdate=${from}&todate=${to}&limit=400`,
+  )
+  const rows = json?.data?.tradesTable?.rows
+  if (!rows?.length) throw new Error('nasdaq SPY: 行なし')
+  return rows
+    .map((r) => {
+      const [m, d, y] = String(r.date).split('/')
+      return { d: `${y}-${m}-${d}`, v: numStr(r.close), h: numStr(r.high), l: numStr(r.low), vol: numStr(r.volume) }
+    })
+    .filter(okBar)
+}
+
+async function yahooSpy() {
+  const json = await getJSON('https://query1.finance.yahoo.com/v8/finance/chart/SPY?range=1y&interval=1d')
+  const r = json?.chart?.result?.[0]
+  const q = r?.indicators?.quote?.[0]
+  if (!r?.timestamp || !q) throw new Error('Yahoo SPY: 結果が空')
+  return r.timestamp
+    .map((t, i) => ({ d: nyDate(new Date(t * 1000)), v: round(q.close[i]), h: round(q.high[i]), l: round(q.low[i]), vol: q.volume[i] }))
+    .filter(okBar)
+}
+
+async function fetchSpy() {
+  const src = { nasdaq: nasdaqSpy, Yahoo: yahooSpy }
+  const out = await firstOk('spy', Object.entries(src).map(([name, fn]) => async () => ({ rows: await fn(), name })))
+  const map = new Map(out.rows.map((p) => [p.d, p]))
+  let series = [...map.values()].sort((a, b) => a.d.localeCompare(b.d))
+  // 場中の当日分は出来高が途中なので落とす（判定は引け値で行う）。NY 16:30 以降は残す
+  const now = new Date()
+  const nyMin = +new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(now) * 60 +
+    now.getUTCMinutes()
+  if (series.at(-1)?.d === nyDate(now) && nyMin < 16 * 60 + 30) series = series.slice(0, -1)
+  if (series.length < 60) throw new Error(`spy: 履歴が短い（${series.length}日）`)
+  return { series: series.slice(-260), updatedAt: null, source: out.name }
+}
+
 // ---------- AAII センチメント調査（週次）----------
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 }
 const pct = (t) => {
@@ -439,7 +486,8 @@ async function fetchAaii(prev) {
 // 比べるのは日付と値だけ（S&P500 の移動平均線は取得元が変わると小数点以下が揺れるため）
 function changedAt(cur, prev, now, prevGeneratedAt) {
   const sig = (x) => { const p = x?.series?.at(-1); return p ? `${p.d}|${p.v}` : '' }
-  if (!prev || sig(cur) !== sig(prev)) return now
+  if (!prev) return null // 初めて取る指標は、いつ値が変わったか分からない
+  if (sig(cur) !== sig(prev)) return now
   if (prev.changedAt !== undefined) return prev.changedAt
   // 記録を始める前のデータ: 時刻つきの updatedAt を代用する。ただし前回の実行時刻と1時間以内のものは
   // 「取りに行った時刻」（プット・コール・レシオ、AAII）なので使わず、不明（null）にする
@@ -463,6 +511,7 @@ async function main() {
     putCall: () => fetchPutCall(prev.putCall),
     aaii: () => fetchAaii(prev.aaii),
     spx: () => fetchSpx(prev.spx),
+    spy: () => fetchSpy(),
   }
   let ok = 0
   // ONLY=putCall,vix のように指定すると一部だけ取得（テスト用）

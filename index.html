@@ -267,6 +267,78 @@ const TECHNICAL = {
   },
 }
 
+// ---- ディストリビューション・デー／フォロースルーデー（IBD 流・SPY の出来高で近似） ----
+// 定義は二次情報（LuxAlgo の解説・IBD Stock Guide の引用など。IBD 公式の原文は未確認）。
+// 個数で「警戒」「調整入り」を決めるのはゲージ独自の目安（IBD は裁量で判断している）
+const IBD = {
+  ddDrop: -0.002,   // ディストリビューション: 前日比 −0.2% を超える下落（丸めない）＋出来高が前日より多い
+  ddLife: 25,       // 25営業日で数から外れる
+  ddRecover: 0.05,  // その日の終値から +5% 上がったら外れる
+  pressureAt: 4,    // 4〜5個で「警戒」
+  correctionAt: 6,  // 6個以上で「調整入り」
+  ftdMinDay: 4,     // フォロースルー: 反発の試み4日目以降に
+  ftdGain: 0.0125,  //   +1.25% 以上＋出来高が前日より多い。その後 反発の安値を割ったら失敗（消灯）
+}
+
+// spy: SPY の日足（v=終値, h, l, vol）／ idxRaw: S&P500 指数の終値。
+// 上げ下げの率は指数の終値で見る（SPY は配当落ちの日に0.3%前後ずれるため）。失効と安値割れは SPY 同士で比べる
+function ibdTimeline(spy, idxRaw) {
+  const idx = new Map((idxRaw || []).map((p) => [p.d, p.v]))
+  const days = []
+  let state = 'uptrend', dds = [], rallyLow = null, day1 = null, ftdLow = null
+  for (let i = 1; i < spy.length; i++) {
+    const p = spy[i], q = spy[i - 1]
+    const c = idx.get(p.d), pc = idx.get(q.d)
+    const pct = c != null && pc != null ? c / pc - 1 : p.v / q.v - 1
+    const volUp = p.vol > q.vol
+    const ev = []
+    dds = dds.filter((x) => i - x.i < IBD.ddLife && p.v < x.close * (1 + IBD.ddRecover))
+    if (pct < IBD.ddDrop && volUp) { dds.push({ i, close: p.v }); ev.push('dd') }
+    if (state === 'correction') {
+      if (p.l < rallyLow) { rallyLow = p.l; day1 = null } // 安値更新 → 反発の試みは数え直し
+      else if (day1 == null) { if (pct > 0) day1 = i }
+      else if (i - day1 + 1 >= IBD.ftdMinDay && pct >= IBD.ftdGain && volUp) {
+        ev.push('ftd'); state = 'uptrend'; ftdLow = rallyLow; dds = [] // フォロースルー前の分は数え直す
+      }
+    } else if (ftdLow != null && p.l < ftdLow) {
+      ev.push('fail'); state = 'correction'; rallyLow = p.l; day1 = null; ftdLow = null
+    } else if (dds.length >= IBD.correctionAt) {
+      ev.push('correction'); state = 'correction'; rallyLow = p.l; day1 = null; ftdLow = null
+    } else {
+      state = dds.length >= IBD.pressureAt ? 'pressure' : 'uptrend'
+    }
+    days.push({
+      d: p.d, v: c ?? null, pct, vol: p.vol, dd: dds.length, state, ev,
+      rallyDay: state === 'correction' && day1 != null ? i - day1 + 1 : null,
+    })
+  }
+  return days
+}
+
+const IBD_STATE = { uptrend: '上昇トレンド', pressure: '警戒', correction: '調整中' }
+
+function ibdJudge(days) {
+  const p = last(days)
+  const ftdIdx = days.findLastIndex((x) => x.ev.includes('ftd'))
+  const failIdx = days.findLastIndex((x) => x.ev.includes('fail'))
+  const sinceFtd = ftdIdx >= 0 ? days.length - 1 - ftdIdx : null
+  const dd = `DD ${p.dd}個（直近25日）`
+  if (p.state !== 'correction' && sinceFtd != null && sinceFtd <= 15 && failIdx < ftdIdx) {
+    const f = days[ftdIdx]
+    return { level: 'on', label: 'フォロースルー点灯', note: `${md(f.d)} に ${signed(f.pct * 100, 1)}%・出来高増で点灯＝上昇トレンド入りの確認。ダマシも約半分あるので、反発の安値割れ（消灯）に注意。${dd}` }
+  }
+  if (p.state === 'correction') {
+    const failNote = failIdx >= 0 && days.length - 1 - failIdx <= 15 ? `${md(days[failIdx].d)} にフォロースルーが失敗（消灯）。` : ''
+    const label = p.rallyDay ? `調整中・反発${p.rallyDay}日目` : '調整中'
+    const next = p.rallyDay
+      ? (p.rallyDay >= IBD.ftdMinDay ? '今日から' : `${IBD.ftdMinDay - p.rallyDay}日後から`) + '、+1.25%以上・出来高増でフォロースルー点灯'
+      : '安値を付けたあと、上げて引けた日が反発1日目'
+    return { level: 'watch', label, note: `${failNote}${dd}。${next}` }
+  }
+  if (p.state === 'pressure') return { level: 'watch', label: `警戒（DD ${p.dd}個）`, note: `機関投資家の売り抜けが増えている。6個で調整入り。${dd}` }
+  return { level: 'calm', label: '上昇トレンド', note: dd }
+}
+
 // ---- ミニチャート（SVG） ----
 function sparkline(el, series, ind) {
   const s = series.slice(-65) // 約3ヶ月
@@ -327,6 +399,103 @@ function sparkline(el, series, ind) {
   el.onpointerup = (e) => { if (e.pointerType !== 'mouse') setTimeout(hide, 1500) }
 }
 
+// ---- ディストリビューション／フォロースルーのグラフ（上: S&P500 と出来事の印・背景は状態／下: DD の個数）----
+function ibdChart(el, all) {
+  const s = all.slice(-65) // 約3ヶ月
+  const W = el.clientWidth || 300, H = el.clientHeight || 190
+  const pad = { l: 4, r: 34, t: 10, b: 16 }
+  const barH = 44, gap = 8
+  const pTop = pad.t, pBot = H - pad.b - barH - gap // 価格の段
+  const bTop = H - pad.b - barH, bBot = H - pad.b // DD の段
+  const vals = s.map((p) => p.v).filter((v) => v != null)
+  let lo = Math.min(...vals), hi = Math.max(...vals)
+  const span = hi - lo || 1; lo -= span * 0.08; hi += span * 0.08
+  const step = (W - pad.l - pad.r) / Math.max(1, s.length - 1)
+  const x = (i) => pad.l + i * step
+  const y = (v) => pTop + (1 - (v - lo) / (hi - lo)) * (pBot - pTop)
+  const ddMax = Math.max(8, ...s.map((p) => p.dd))
+  const by = (n) => bBot - (n / ddMax) * barH
+  const bands = s.map((p, i) => p.state === 'uptrend' ? '' :
+    `<rect x="${(x(i) - step / 2).toFixed(1)}" y="${pTop}" width="${(step + 0.5).toFixed(1)}" height="${bBot - pTop}" fill="var(--${p.state === 'correction' ? 'hot' : 'warn'}-bg)"/>`).join('')
+  const path = s.map((p, i) => p.v == null ? '' : `L${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join('').replace(/^L/, 'M')
+  const bw = Math.max(1.5, step * 0.6)
+  const bars = s.map((p, i) => p.dd ? `<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${by(p.dd).toFixed(1)}" width="${bw.toFixed(1)}" height="${(bBot - by(p.dd)).toFixed(1)}" fill="${p.dd >= IBD.correctionAt ? 'var(--hot)' : p.dd >= IBD.pressureAt ? 'var(--warn)' : 'var(--threshold)'}"/>` : '').join('')
+  const marks = s.map((p, i) => {
+    if (p.v == null) return ''
+    const cx = x(i).toFixed(1), cy = y(p.v)
+    let m = ''
+    if (p.ev.includes('dd')) m += `<circle cx="${cx}" cy="${cy.toFixed(1)}" r="3.5" fill="var(--hot)" stroke="var(--surface)" stroke-width="1"/>`
+    if (p.ev.includes('ftd')) m += `<path d="M${cx},${(cy + 6).toFixed(1)} l-6,10 h12 z" fill="var(--good)"/><text class="axis" x="${(+cx + 8).toFixed(1)}" y="${(cy + 15).toFixed(1)}" fill="var(--good-ink)">FTD</text>`
+    if (p.ev.includes('fail')) m += `<text x="${cx}" y="${(cy - 6).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700" fill="var(--hot)">✕</text>`
+    if (p.ev.includes('correction')) m += `<line x1="${cx}" x2="${cx}" y1="${pTop}" y2="${bBot}" stroke="var(--hot)" stroke-width="1" stroke-dasharray="3 2"/><text class="axis" x="${cx}" y="${pTop + 8}" text-anchor="middle" fill="var(--hot)">調整入り</text>`
+    return m
+  }).join('')
+  const lvl = (n, c) => `<line x1="${pad.l}" x2="${W - pad.r}" y1="${by(n)}" y2="${by(n)}" stroke="${c}" stroke-width="1" stroke-dasharray="3 3"/><text class="axis" x="${W - pad.r + 4}" y="${by(n) + 3}">${n}</text>`
+  const lp = s.length - 1
+  el.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="S&P500 とディストリビューション・デー／フォロースルーデー 直近3ヶ月">
+      ${bands}
+      <line x1="${pad.l}" x2="${W - pad.r}" y1="${bBot}" y2="${bBot}" stroke="var(--grid)" stroke-width="1"/>
+      ${lvl(IBD.pressureAt, 'var(--warn)')}${lvl(IBD.correctionAt, 'var(--hot)')}
+      <text class="axis" x="${W - pad.r + 4}" y="${bTop - 2}">DD数</text>
+      ${bars}
+      <path d="${path}" fill="none" stroke="var(--line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${marks}
+      <text class="axis" x="${pad.l}" y="${H - 2}">${md(s[0].d)}</text>
+      <text class="axis" x="${W - pad.r}" y="${H - 2}" text-anchor="end">${md(s[lp].d)}</text>
+      <g class="hover" style="display:none"><line y1="${pTop}" y2="${bBot}" stroke="var(--text-3)" stroke-width="1"/></g>
+    </svg><div class="tip"></div>`
+  const svg = el.querySelector('svg'), g = el.querySelector('.hover'), tip = el.querySelector('.tip')
+  const EV = { dd: 'DD', ftd: 'フォロースルー点灯', fail: 'フォロースルー失敗', correction: '調整入り' }
+  const show = (clientX) => {
+    const r = svg.getBoundingClientRect()
+    const px = ((clientX - r.left) / r.width) * W
+    const i = Math.max(0, Math.min(lp, Math.round((px - pad.l) / step)))
+    const p = s[i], cx = x(i)
+    g.style.display = ''
+    g.querySelector('line').setAttribute('x1', cx); g.querySelector('line').setAttribute('x2', cx)
+    tip.style.display = 'block'
+    tip.style.left = `${(cx / W) * 100}%`
+    tip.textContent = `${md(p.d)}  ${fmt(p.v, 0)}（${signed(p.pct * 100, 2)}%）  DD ${p.dd}個  ${IBD_STATE[p.state]}` +
+      (p.rallyDay ? `・反発${p.rallyDay}日目` : '') + p.ev.map((e) => `  ${EV[e]}`).join('')
+  }
+  const hide = () => { g.style.display = 'none'; tip.style.display = 'none' }
+  el.onpointermove = (e) => show(e.clientX)
+  el.onpointerdown = (e) => show(e.clientX)
+  el.onpointerleave = hide
+  el.onpointerup = (e) => { if (e.pointerType !== 'mouse') setTimeout(hide, 1500) }
+}
+
+function ibdCardHtml(results) {
+  const spy = DATA.spy
+  if (!spy?.series?.length) return `<article class="card"><h2>ディストリビューション／フォロースルー</h2><p class="error">データなし${DATA.errors?.spy ? '（取得失敗）' : ''}</p></article>`
+  const days = ibdTimeline(spy.series, DATA.spx?.raw)
+  const r = ibdJudge(days)
+  results.ibd = { ...r, days }
+  const p = last(days)
+  return `<article class="card" data-key="ibd">
+      <div class="card-head">
+        <h2>ディストリビューション／フォロースルー<small>IBD流・S&P500（出来高は SPY で代用）</small></h2>
+        <span class="pill ${r.level}">${ICON[r.level]} ${r.label}</span>
+      </div>
+      <div class="value-row">
+        <span class="value">${p.dd}<small style="font-size:14px;font-weight:500"> 個</small></span>
+        <span class="delta">ディストリビューション・デー（直近25日）</span>
+      </div>
+      <div class="status-note">${r.note}</div>
+      <div class="legend" style="flex-wrap:wrap;row-gap:2px">
+        <span><i style="background:var(--hot)"></i>DD（売り抜けの日）</span>
+        <span><i style="background:var(--good)"></i>▲ フォロースルー</span>
+        <span style="color:var(--hot)">✕ 失敗</span>
+        <span><i style="background:var(--hot-bg);border:1px solid var(--hot)"></i>調整中</span>
+        <span><i style="background:var(--warn-bg);border:1px solid var(--warn)"></i>警戒</span>
+      </div>
+      <div class="chart" id="chart-ibd" style="height:190px"></div>
+      <div class="rule">基準：DD＝前日比−0.2%超の下落＋出来高が前日より多い（25営業日か、その日の終値から+5%で数から外れる）。フォロースルー＝調整中の反発4日目以降に+1.25%以上＋出来高増で点灯、反発の安値を割ったら失敗。4〜5個で警戒・6個で調整入りはゲージ独自の目安。出来高はSPYで代用するので、IBDの公式の数とずれることがあります</div>
+      <div class="meta">${dataDate(spy, 'spy')}・出来高 ${spy.source || ''}</div>
+    </article>`
+}
+
 // ---- 描画 ----
 let DATA = null
 const ICON = { on: '●', watch: '▲', calm: '–' }
@@ -344,8 +513,10 @@ function dataDate(d, key) {
   const stale = d.stale ? ' <span class="stale">⚠ 取得失敗・前回値</span>' : ''
   // changedAt = 値が最後に変わったのを取得スクリプトが確かめた時刻（scripts/fetch.mjs）
   const t = d.changedAt ? new Date(d.changedAt) : null
-  const upd = t && !Number.isNaN(+t) ? `最終更新 ${jstFmt.format(t)}（${agoText(t)}）・` : ''
-  return `${upd}データ日 ${md(p.d)}（米国）${stale}`
+  const upd = t && !Number.isNaN(+t)
+    ? `最終更新 ${jstFmt.format(t)}（${agoText(t)}）・米国 ${md(p.d)} 分`
+    : `最終更新 ${md(p.d)}（米国）`
+  return `${upd}${stale}`
 }
 
 function cardHtml(ind, results) {
@@ -380,12 +551,14 @@ function render() {
   const d = DATA
   const results = {}
   document.getElementById('cards').innerHTML = INDICATORS.map((ind) => cardHtml(ind, results)).join('')
-  document.getElementById('technical').innerHTML = cardHtml(TECHNICAL, results)
+  document.getElementById('technical').innerHTML = cardHtml(TECHNICAL, results) + ibdCardHtml(results)
 
   for (const ind of [...INDICATORS, TECHNICAL]) {
     const el = document.getElementById(`chart-${ind.key}`)
     if (el && d[ind.key]?.series?.length) sparkline(el, d[ind.key].series, ind)
   }
+  const ibdEl = document.getElementById('chart-ibd')
+  if (ibdEl && results.ibd?.days?.length) ibdChart(ibdEl, results.ibd.days)
 
   const on = INDICATORS.filter((i) => results[i.key]?.level === 'on')
   const strongest = results.vix?.level === 'on' && results.tnx?.level === 'on'
@@ -413,7 +586,10 @@ function render() {
       const r = results[i.key]
       return `<span class="dot ${r?.level || ''}">${r ? ICON[r.level] : '?'} ${i.name.replace(/（.*）/, '')}</span>`
     }).join('')}</div>
-    ${results.spx ? `<div class="sub">テクニカル：${ICON[results.spx.level]} S&P500 ${results.spx.label}</div>` : ''}`
+    ${results.spx || results.ibd ? `<div class="sub">テクニカル：${[
+      results.spx && `${ICON[results.spx.level]} S&P500 ${results.spx.label}`,
+      results.ibd && `${ICON[results.ibd.level]} IBD流 ${results.ibd.label}`,
+    ].filter(Boolean).join(' ／ ')}</div>` : ''}`
 
   const t = new Date(d.generatedAt)
   document.getElementById('updated').textContent = `${jstFmt.format(t)}（${agoText(t)}）`
@@ -427,9 +603,25 @@ const nyParts = (t) => {
   }).formatToParts(t).map((x) => [x.type, x.value]))
   return { wd: p.weekday, min: +p.hour * 60 + +p.minute }
 }
+// NYSE 公式の休場日・短縮取引日（https://www.nyse.com/markets/hours-calendars・2026-11-21 確認）。
+// 公式の掲載は2028年まで。2029年以降は NYSE が発表したら書き足す（無ければ平日は開場扱いになるだけ）
+const NYSE_HOLIDAYS = {
+  '2026-01-01': '元日', '2026-01-19': 'キング牧師の日', '2026-02-16': 'ワシントン誕生日', '2026-04-03': 'グッドフライデー',
+  '2026-05-25': '戦没者追悼記念日', '2026-06-19': 'ジューンティーンス', '2026-07-03': '独立記念日（振替）', '2026-09-07': 'レイバーデー',
+  '2026-11-26': '感謝祭', '2026-12-25': 'クリスマス',
+  '2027-01-01': '元日', '2027-01-18': 'キング牧師の日', '2027-02-15': 'ワシントン誕生日', '2027-03-26': 'グッドフライデー',
+  '2027-05-31': '戦没者追悼記念日', '2027-06-18': 'ジューンティーンス（振替）', '2027-07-05': '独立記念日（振替）', '2027-09-06': 'レイバーデー',
+  '2027-11-25': '感謝祭', '2027-12-24': 'クリスマス（振替）',
+  '2028-01-17': 'キング牧師の日', '2028-02-21': 'ワシントン誕生日', '2028-04-14': 'グッドフライデー', '2028-05-29': '戦没者追悼記念日',
+  '2028-06-19': 'ジューンティーンス', '2028-07-04': '独立記念日', '2028-09-04': 'レイバーデー', '2028-11-23': '感謝祭', '2028-12-25': 'クリスマス',
+}
+const NYSE_EARLY_CLOSE = ['2026-11-27', '2026-12-24', '2027-11-26', '2028-07-03', '2028-11-24'] // 13:00 引け
+const nyYmd = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(t)
 const isOpen = (t) => {
   const { wd, min } = nyParts(t)
-  return !['Sat', 'Sun'].includes(wd) && min >= 570 && min < 960 // 9:30〜16:00（祝日は考慮しない）
+  const ymd = nyYmd(t)
+  const close = NYSE_EARLY_CLOSE.includes(ymd) ? 780 : 960 // 13:00 / 16:00
+  return !['Sat', 'Sun'].includes(wd) && !NYSE_HOLIDAYS[ymd] && min >= 570 && min < close // 9:30〜
 }
 // 時報係（sos-new の cron）が使う GitHub の鍵の期限。作り直したらここを更新する
 const TOKEN_EXPIRES = '2027-11-20'
@@ -441,16 +633,19 @@ function renderMarket() {
   const tokenWarn = daysLeft <= 14
     ? `<div class="stale">⚠ 自動更新用のGitHubの鍵が${daysLeft > 0 ? `あと${daysLeft}日で` : ''}期限切れ${daysLeft > 0 ? 'になります' : 'です'}（${TOKEN_EXPIRES}）。Claudeに「market-gaugeの鍵を作り直したい」と伝えてください。</div>`
     : ''
+  const early = NYSE_EARLY_CLOSE.includes(nyYmd(now)) ? '（今日は現地13:00に閉まる短縮取引）' : ''
   if (isOpen(now)) {
-    el.innerHTML = '<b class="open">● 米国市場オープン中</b>・約10分ごとに自動更新' + tokenWarn
+    el.innerHTML = `<b class="open">● 米国市場オープン中</b>${early}・約10分ごとに自動更新` + tokenWarn
     return
   }
+  const holiday = NYSE_HOLIDAYS[nyYmd(now)]
+  const closedLabel = holiday ? `– 米国市場は休場（${holiday}）` : '– 米国市場クローズ中'
   let t = new Date(Math.ceil(now / 60000) * 60000)
   for (let i = 0; i < 4 * 24 * 60 && !isOpen(t); i++) t = new Date(t.getTime() + 60000)
   const jst = new Intl.DateTimeFormat('ja-JP', {
     timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit',
   }).format(t)
-  el.innerHTML = `<b>– 米国市場クローズ中</b>・次の更新は ${jst}ごろ〜` + tokenWarn
+  el.innerHTML = `<b>${closedLabel}</b>・次の更新は ${jst}ごろ〜` + tokenWarn
 }
 
 async function load() {
