@@ -153,7 +153,7 @@ h1 { font-size: 22px; margin: 0; white-space: nowrap; flex-shrink: 0; letter-spa
       <li>記事の目安：恐怖サインが多く点いたら、次にテクニカルを確認してから分割エントリー。</li>
       <li>🔥 <b>最強シグナル</b>：「VIXが高値から低下」＋「10年債利回りが急低下」が同時に点灯。</li>
       <li>一時的な急変はダマシのことも。3〜5日の流れで確認し、エントリーは3〜5回に分けて。</li>
-      <li>データは市場が開いている間、約30分ごとに自動更新（Fear &amp; Greed は数十分〜の遅れあり）。</li>
+      <li>データは市場が開いている間、約10分ごとに自動更新（Fear &amp; Greed は数十分〜の遅れあり）。</li>
     </ul>
   </details>
 </div>
@@ -425,11 +425,18 @@ const isOpen = (t) => {
   const { wd, min } = nyParts(t)
   return !['Sat', 'Sun'].includes(wd) && min >= 570 && min < 960 // 9:30〜16:00（祝日は考慮しない）
 }
+// 時報係（sos-new の cron）が使う GitHub の鍵の期限。作り直したらここを更新する
+const TOKEN_EXPIRES = '2027-11-20'
+
 function renderMarket() {
   const el = document.getElementById('market')
   const now = new Date()
+  const daysLeft = Math.ceil((new Date(TOKEN_EXPIRES + 'T00:00:00+09:00') - now) / 86400000)
+  const tokenWarn = daysLeft <= 14
+    ? `<div class="stale">⚠ 自動更新用のGitHubの鍵が${daysLeft > 0 ? `あと${daysLeft}日で` : ''}期限切れ${daysLeft > 0 ? 'になります' : 'です'}（${TOKEN_EXPIRES}）。Claudeに「market-gaugeの鍵を作り直したい」と伝えてください。</div>`
+    : ''
   if (isOpen(now)) {
-    el.innerHTML = '<b class="open">● 米国市場オープン中</b>・約15〜30分ごとに自動更新'
+    el.innerHTML = '<b class="open">● 米国市場オープン中</b>・約10分ごとに自動更新' + tokenWarn
     return
   }
   let t = new Date(Math.ceil(now / 60000) * 60000)
@@ -437,7 +444,7 @@ function renderMarket() {
   const jst = new Intl.DateTimeFormat('ja-JP', {
     timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit',
   }).format(t)
-  el.innerHTML = `<b>– 米国市場クローズ中</b>・次の更新は ${jst}ごろ〜`
+  el.innerHTML = `<b>– 米国市場クローズ中</b>・次の更新は ${jst}ごろ〜` + tokenWarn
 }
 
 async function load() {
