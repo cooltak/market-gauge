@@ -20,7 +20,7 @@ GitHub Actions（30分ごと） → scripts/fetch.mjs → data.json をコミッ
 
 「VIX高値から低下」＋「10年債利回り急低下」が同時に出たら 🔥最強シグナル。
 
-判定ロジックは `index.html` の `INDICATORS` にまとまっている（基準値を変えるならここ）。
+判定ロジックは `index.html` の `INDICATORS` にまとまっている（基準値を変えるならここ。タイトル横の (i) の説明 `HELP` も一緒に直す）。
 
 各カードの「最終更新」は、値が最後に変わった時刻（`data.json` の `changedAt`。`scripts/fetch.mjs` が最新の1点の日付と値を前回と比べて記録する）。
 
