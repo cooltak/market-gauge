@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-21T14:15:33.395Z",
+ "generatedAt": "2026-11-21T14:24:48.921Z",
  "errors": {},
  "vix": {
   "series": [
@@ -525,7 +525,8 @@
    }
   ],
   "updatedAt": "2026-11-20",
-  "source": "CBOE+CNBC"
+  "source": "CBOE+CNBC",
+  "changedAt": null
  },
  "tnx": {
   "series": [
@@ -1051,7 +1052,8 @@
    }
   ],
   "updatedAt": "2026-11-20T17:05:00.000-0500",
-  "source": "CNBC"
+  "source": "CNBC",
+  "changedAt": "2026-11-20T22:05:00.000Z"
  },
  "fearGreed": {
   "series": [
@@ -1580,7 +1582,8 @@
   "previousClose": 18.7,
   "previousWeek": 37.4,
   "previousMonth": 28.7,
-  "updatedAt": "2026-11-20T23:59:52.000Z"
+  "updatedAt": "2026-11-20T23:59:52.000Z",
+  "changedAt": "2026-11-20T23:59:52.000Z"
  },
  "putCall": {
   "series": [
@@ -2149,8 +2152,9 @@
     "index": 1.27
    }
   ],
-  "updatedAt": "2026-11-21T14:15:44.318Z",
-  "fetchedDays": 2
+  "updatedAt": "2026-11-21T14:24:59.902Z",
+  "fetchedDays": 2,
+  "changedAt": null
  },
  "aaii": {
   "series": [
@@ -2309,8 +2313,9 @@
     "bear": 42.2
    }
   ],
-  "updatedAt": "2026-11-21T14:15:44.634Z",
-  "source": "AAII"
+  "updatedAt": "2026-11-21T14:25:00.205Z",
+  "source": "AAII",
+  "changedAt": null
  },
  "spx": {
   "series": [
@@ -3622,6 +3627,7 @@
     "d": "2026-11-20",
     "v": 6910.39
    }
-  ]
+  ],
+  "changedAt": null
  }
 }
