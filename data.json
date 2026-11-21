@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-21T11:15:07.214Z",
+ "generatedAt": "2026-11-21T13:20:11.505Z",
  "errors": {},
  "vix": {
   "series": [
@@ -2149,7 +2149,7 @@
     "index": 1.27
    }
   ],
-  "updatedAt": "2026-11-21T11:16:03.893Z",
+  "updatedAt": "2026-11-21T13:20:22.269Z",
   "fetchedDays": 2
  },
  "aaii": {
@@ -2309,7 +2309,7 @@
     "bear": 42.2
    }
   ],
-  "updatedAt": "2026-11-21T11:16:04.189Z",
+  "updatedAt": "2026-11-21T13:20:22.600Z",
   "source": "AAII"
  },
  "spx": {
