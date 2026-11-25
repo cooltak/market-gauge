@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-25T21:30:11.445Z",
+ "generatedAt": "2026-11-25T22:26:10.696Z",
  "errors": {},
  "vix": {
   "series": [
@@ -1048,12 +1048,12 @@
    },
    {
     "d": "2026-11-25",
-    "v": 4.868
+    "v": 4.864
    }
   ],
-  "updatedAt": "2026-11-25T16:30:03.000-0500",
+  "updatedAt": "2026-11-25T17:05:00.000-0500",
   "source": "CNBC",
-  "changedAt": "2026-11-25T21:10:09.929Z"
+  "changedAt": "2026-11-25T22:26:10.696Z"
  },
  "fearGreed": {
   "series": [
@@ -1582,7 +1582,7 @@
   "previousClose": 17.4,
   "previousWeek": 29.9,
   "previousMonth": 16.7,
-  "updatedAt": "2026-11-25T21:19:42.000Z",
+  "updatedAt": "2026-11-25T22:09:41.000Z",
   "changedAt": "2026-11-25T21:30:11.445Z"
  },
  "putCall": {
@@ -2164,7 +2164,7 @@
     "index": 1.12
    }
   ],
-  "updatedAt": "2026-11-25T21:30:21.642Z",
+  "updatedAt": "2026-11-25T22:26:20.429Z",
   "fetchedDays": 1,
   "changedAt": "2026-11-25T05:24:55.615Z"
  },
@@ -2325,7 +2325,7 @@
     "bear": 42.2
    }
   ],
-  "updatedAt": "2026-11-25T21:30:22.441Z",
+  "updatedAt": "2026-11-25T22:26:20.641Z",
   "source": "AAII",
   "changedAt": null
  },
@@ -3112,7 +3112,7 @@
     "ma200": 7352.49
    }
   ],
-  "updatedAt": "2026-11-25T16:20:00.000-0500",
+  "updatedAt": "2026-11-25T16:32:06.000-0500",
   "source": "CNBC",
   "raw": [
    {
