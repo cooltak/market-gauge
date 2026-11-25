@@ -200,14 +200,26 @@ async function cnbcQuote(sym) {
   return { d, v: round(v, 3), t: String(t), pc: Number.isFinite(pc) ? round(pc, 3) : null }
 }
 
+// d の直前の平日（祝日は考えない）
+function prevWeekday(d) {
+  const t = new Date(`${d}T00:00:00Z`)
+  do t.setUTCDate(t.getUTCDate() - 1)
+  while (t.getUTCDay() === 0 || t.getUTCDay() === 6)
+  return t.toISOString().slice(0, 10)
+}
+
 function appendPoint(series, q, keep = 130) {
   const map = new Map((series || []).map((p) => [p.d, p.v]))
   map.set(q.d, q.v)
   // ひとつ前の日の値を、CNBC の「前日の終値」で上書きする（場中の値や日付の取り違えで入った値を自動で直す。
-  // 2026-11-21: 11/20 の場中の値が 11/19 の欄に残っていた）。前の日が4日以上離れている（欠けた日がある）時は触らない
-  if (q.pc != null) {
+  // 2026-11-21: 11/20 の場中の値が 11/19 の欄に残っていた）
+  // ただし「前日の終値」が今の値と同じ時は触らない。CNBC は引けの後、日付が今日のまま「前日の終値」を今日の終値に
+  // 切り替えるので、そのまま使うと前の日の欄に今日の終値が入る（2026-11-26: 11/19 に 11/20 の、11/23 に 11/24 の終値が入っていた）
+  if (q.pc != null && q.pc !== q.v) {
     const prevD = [...map.keys()].filter((d) => d < q.d).sort().at(-1)
-    if (prevD && (Date.parse(q.d) - Date.parse(prevD)) / 86400e3 <= 4 && Math.abs(q.pc / map.get(prevD) - 1) < 0.05) {
+    // 上書きするのは「直前の平日」の欄だけ。その日の行が無い時（履歴が1日遅れ等）に、もうひとつ前の日へ書き込まない
+    // （2026-11-26: FRED に 11/24 が無く、11/24 の終値が 11/23 の欄に入った）。月曜の前の金曜が祝日の週は直さない（実害なし）
+    if (prevD && prevD === prevWeekday(q.d) && Math.abs(q.pc / map.get(prevD) - 1) < 0.05) {
       map.set(prevD, q.pc)
     }
   }
@@ -232,6 +244,10 @@ async function historyPlusLatest(label, historySources, cnbcSym, prevSeries, kee
     console.warn(`${label}: ${e.message}`)
   }
   if (out) {
+    // 履歴の元が1日遅れ（FRED など）の時、前回までに入れた直近の日を落とさない（落とすと昨日の行が消える）
+    const lastHist = out.series.at(-1).d
+    const newer = (prevSeries || []).filter((p) => p.d > lastHist)
+    if (newer.length) out.series = [...out.series, ...newer.map((p) => ({ d: p.d, v: p.v }))].slice(-keep)
     if (q && q.d >= out.series.at(-1).d) {
       out.series = appendPoint(out.series, q, keep)
       out.updatedAt = q.t
