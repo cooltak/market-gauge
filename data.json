@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-27T18:20:10.014Z",
+ "generatedAt": "2026-11-27T18:30:11.441Z",
  "errors": {},
  "vix": {
   "series": [
@@ -1051,7 +1051,7 @@
     "v": 4.936
    }
   ],
-  "updatedAt": "2026-11-27T13:19:42.000-0500",
+  "updatedAt": "2026-11-27T13:28:37.000-0500",
   "source": "CNBC",
   "changedAt": "2026-11-27T18:10:18.829Z"
  },
@@ -1582,7 +1582,7 @@
   "previousClose": 15.6,
   "previousWeek": 18.6,
   "previousMonth": 32.9,
-  "updatedAt": "2026-11-27T18:17:14.000Z",
+  "updatedAt": "2026-11-27T18:25:32.000Z",
   "changedAt": "2026-11-27T18:20:10.014Z"
  },
  "putCall": {
@@ -2170,7 +2170,7 @@
     "index": 1.04
    }
   ],
-  "updatedAt": "2026-11-27T18:20:20.465Z",
+  "updatedAt": "2026-11-27T18:30:22.366Z",
   "fetchedDays": 0,
   "changedAt": "2026-11-26T04:58:48.400Z"
  },
@@ -2338,7 +2338,7 @@
     "bear": 45.4
    }
   ],
-  "updatedAt": "2026-11-27T18:20:20.862Z",
+  "updatedAt": "2026-11-27T18:30:22.670Z",
   "source": "AAII",
   "changedAt": "2026-11-26T14:20:13.561Z"
  },
