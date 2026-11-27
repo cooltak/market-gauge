@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-27T20:50:10.028Z",
+ "generatedAt": "2026-11-27T21:00:16.502Z",
  "errors": {},
  "vix": {
   "series": [
@@ -1578,7 +1578,7 @@
   "previousClose": 15.6,
   "previousWeek": 18.6,
   "previousMonth": 32.9,
-  "updatedAt": "2026-11-27T20:32:55.000Z",
+  "updatedAt": "2026-11-27T20:42:59.000Z",
   "changedAt": "2026-11-27T20:10:09.674Z"
  },
  "putCall": {
@@ -2166,7 +2166,7 @@
     "index": 1.04
    }
   ],
-  "updatedAt": "2026-11-27T20:50:21.073Z",
+  "updatedAt": "2026-11-27T21:00:29.020Z",
   "fetchedDays": 0,
   "changedAt": "2026-11-26T04:58:48.400Z"
  },
@@ -2334,7 +2334,7 @@
     "bear": 45.4
    }
   ],
-  "updatedAt": "2026-11-27T20:50:21.402Z",
+  "updatedAt": "2026-11-27T21:00:29.359Z",
   "source": "AAII",
   "changedAt": "2026-11-26T14:20:13.561Z"
  },
